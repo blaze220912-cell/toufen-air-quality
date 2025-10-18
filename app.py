@@ -5,11 +5,15 @@ from threading import Thread
 import time
 import urllib3
 import os
+import pytz
 
 # 關閉 SSL 警告訊息
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+
+# 設定台北時區
+TZ = pytz.timezone('Asia/Taipei')
 
 # 設定背景圖片檔名（你可以修改這裡）
 BACKGROUND_IMAGE = "background.jpg"  # 改成你的圖片檔名
@@ -130,7 +134,7 @@ def fetch_air_quality_data():
                 'o3': o3,
                 'o3_color': o3_color,
                 'o3_label': o3_label,
-                'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'update_time': datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S'),
                 'site_name': record.get('sitename', '頭份'),
                 'publish_time': record.get('datacreationdate', 'N/A'),
                 'has_data': True
@@ -366,8 +370,8 @@ def index():
     # 檢查背景圖片是否存在
     bg_exists = os.path.exists(BACKGROUND_IMAGE)
     
-    # 加上當前頁面載入時間
-    page_load_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # 加上當前頁面載入時間（使用台北時區）
+    page_load_time = datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')
     
     return render_template_string(
         HTML_TEMPLATE, 
@@ -399,3 +403,12 @@ if __name__ == '__main__':
 
 # Gunicorn 啟動時自動執行
 ensure_background_thread()
+```
+
+## **另外，建立 `requirements.txt` 檔案：**
+```
+Flask==3.0.0
+requests==2.31.0
+urllib3==2.1.0
+pytz==2024.1
+gunicorn==21.2.0
