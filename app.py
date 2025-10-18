@@ -28,6 +28,22 @@ latest_data = {
     'has_data': False
 }
 
+# 用於確保背景執行緒只啟動一次
+background_thread_started = False
+
+def start_background_thread():
+    """啟動背景執行緒（只執行一次）"""
+    global background_thread_started
+    if not background_thread_started:
+        background_thread_started = True
+        print("=== 啟動背景資料更新執行緒 ===")
+        # 立即抓取一次數據
+        fetch_air_quality_data()
+        # 啟動定期更新執行緒
+        update_thread = Thread(target=update_data_periodically, daemon=True)
+        update_thread.start()
+        print("=== 背景執行緒已啟動 ===")
+
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_488?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 
 def fetch_air_quality_data():
