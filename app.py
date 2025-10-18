@@ -29,19 +29,18 @@ latest_data = {
 }
 
 # 用於確保背景執行緒只啟動一次
-background_thread_started = False
+_background_thread = None
+_background_lock = Thread.__module__  # 簡單的初始化標記
 
-def start_background_thread():
-    """啟動背景執行緒（只執行一次）"""
-    global background_thread_started
-    if not background_thread_started:
-        background_thread_started = True
-        print("=== 啟動背景資料更新執行緒 ===")
-        # 立即抓取一次數據
+def ensure_background_thread():
+    """確保背景執行緒已啟動"""
+    global _background_thread
+    if _background_thread is None:
+        print("=== 初始化：立即抓取資料 ===")
         fetch_air_quality_data()
-        # 啟動定期更新執行緒
-        update_thread = Thread(target=update_data_periodically, daemon=True)
-        update_thread.start()
+        print("=== 啟動背景定期更新執行緒 ===")
+        _background_thread = Thread(target=update_data_periodically, daemon=True)
+        _background_thread.start()
         print("=== 背景執行緒已啟動 ===")
 
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_488?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
@@ -357,6 +356,9 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     """首頁路由"""
+    # 確保背景執行緒已啟動
+    ensure_background_thread()
+    
     print(f"網頁請求 - has_data: {latest_data['has_data']}")
     print(f"當前數據: PM2.5={latest_data['pm25']}, PM10={latest_data['pm10']}")
     # 檢查背景圖片是否存在
@@ -373,12 +375,8 @@ def background():
     return "", 404
 
 if __name__ == '__main__':
-    # 啟動時先抓取一次數據
-    fetch_air_quality_data()
-    
-    # 在背景執行緒中定期更新數據
-    update_thread = Thread(target=update_data_periodically, daemon=True)
-    update_thread.start()
+    # 本地開發時啟動
+    ensure_background_thread()
     
     # 啟動 Flask 應用程式
     print("Flask 應用程式啟動中...")
@@ -387,3 +385,6 @@ if __name__ == '__main__':
     # 取得 PORT 環境變數（Render 會自動設定）
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
+# Gunicorn 啟動時自動執行
+ensure_background_thread()
