@@ -335,11 +335,12 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="update-info">
-            <div>📡 最後更新時間：<span class="update-time">{{ data.update_time }}</span></div>
+            <div>🖥️ 頁面載入時間：<span class="update-time">{{ page_load_time }}</span></div>
+            <div style="margin-top: 5px;">📡 資料抓取時間：{{ data.update_time }}</div>
             {% if data.publish_time != 'N/A' %}
-            <div style="margin-top: 5px;">資料發布時間：{{ data.publish_time }}</div>
+            <div style="margin-top: 5px;">📊 環境部發布時間：{{ data.publish_time }}</div>
             {% endif %}
-            <div class="refresh-note">⏱️ 數據每5分鐘自動更新 | 頁面每4分鐘自動刷新</div>
+            <div class="refresh-note">⏱️ 資料每5分鐘更新 | 頁面每4分鐘自動刷新</div>
         </div>
         {% else %}
         <div class="error-message">
@@ -361,9 +362,19 @@ def index():
     
     print(f"網頁請求 - has_data: {latest_data['has_data']}")
     print(f"當前數據: PM2.5={latest_data['pm25']}, PM10={latest_data['pm10']}")
+    
     # 檢查背景圖片是否存在
     bg_exists = os.path.exists(BACKGROUND_IMAGE)
-    return render_template_string(HTML_TEMPLATE, data=latest_data, bg_image=BACKGROUND_IMAGE if bg_exists else None)
+    
+    # 加上當前頁面載入時間
+    page_load_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    return render_template_string(
+        HTML_TEMPLATE, 
+        data=latest_data, 
+        page_load_time=page_load_time,
+        bg_image=BACKGROUND_IMAGE if bg_exists else None
+    )
 
 @app.route('/background')
 def background():
