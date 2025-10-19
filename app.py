@@ -233,7 +233,7 @@ def fetch_weather_data():
                     'temp_min': daily_low,
                     'feels_like': temp,
                     'humidity': humidity,
-                    'pop': precipitation,
+                    'rain': precipitation,
                     'weather_desc': weather_desc,
                     'wind_speed': wind_speed,
                     'wind_dir': wind_dir_text,
@@ -613,6 +613,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
