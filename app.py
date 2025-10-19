@@ -34,7 +34,8 @@ latest_data = {
 # 鎖定機制避免重複抓取
 fetch_lock = Lock()
 
-API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_488?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
+# ✅ 改用即時 API (aqx_p_432)
+API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 
 def get_taipei_time():
     """取得台北時間"""
@@ -55,12 +56,12 @@ def fetch_air_quality_data():
             records = data['records']
             print(f"API 返回 {len(records)} 筆資料")
             
-            # 篩選出有資料建立時間的資料並排序
-            valid_records = [r for r in records if r.get('datacreationdate')]
+            # ✅ 改用 publishtime 欄位並排序
+            valid_records = [r for r in records if r.get('publishtime')]
             if valid_records:
-                valid_records.sort(key=lambda x: x.get('datacreationdate', ''), reverse=True)
+                valid_records.sort(key=lambda x: x.get('publishtime', ''), reverse=True)
                 record = valid_records[0]
-                print(f"✓ 選擇最新資料，建立時間: {record.get('datacreationdate', 'N/A')}")
+                print(f"✓ 選擇最新資料，發布時間: {record.get('publishtime', 'N/A')}")
             else:
                 record = records[0]
             
@@ -117,7 +118,7 @@ def fetch_air_quality_data():
                 'o3_label': o3_label,
                 'update_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S'),
                 'site_name': record.get('sitename', '頭份'),
-                'publish_time': record.get('datacreationdate', 'N/A'),
+                'publish_time': record.get('publishtime', 'N/A'),  # ✅ 改用 publishtime
                 'has_data': True,
                 'last_fetch': get_taipei_time()
             }
