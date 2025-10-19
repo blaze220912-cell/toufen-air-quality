@@ -593,7 +593,7 @@ HTML_TEMPLATE = """
         function updateChange(selector, value) {
             const el = document.querySelector(selector);
             if (el) {
-                if (value) {
+                if (value !== null && value !== undefined && value !== '') {
                     el.textContent = value;
                     el.style.display = '';
                     el.className = 'data-change';
