@@ -34,7 +34,7 @@ fetch_lock = Lock()
 
 AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 WEATHER_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&StationId=C0E730"
-UVI_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0005-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&StationName=新竹"
+UVI_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&StationId=467571"
 
 def get_taipei_time():
     return datetime.now(TAIPEI_TZ)
@@ -613,6 +613,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
