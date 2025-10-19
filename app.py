@@ -199,8 +199,8 @@ def fetch_weather_data():
                         station_name = uvi_station.get('StationName', '')
                         station_id = uvi_station.get('StationId', '')
                         if '新竹' in station_name or station_id == '467571':
-                            weather_element = uvi_station.get('WeatherElement', {})
-                            uvi_value = weather_element.get('UVIndex', 'N/A')
+                            weather_element_uvi = uvi_station.get('WeatherElement', {})
+                            uvi_value = weather_element_uvi.get('UVIndex', 'N/A')
                             
                             if uvi_value and uvi_value != '-99' and uvi_value != 'N/A':
                                 try:
@@ -240,28 +240,6 @@ def fetch_weather_data():
                     'uvi': uvi,
                     'uvi_level': uvi_level,
                     'uvi_color': uvi_color,
-                    'has_data': True,
-                    'last_fetch': get_taipei_time()
-                }
-                print(f"✓ 頭份觀測站數據更新成功")
-                print(f"  溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
-                return
-            else:
-                print("× 沒有找到觀測站資料")
-        else:
-            print(f"× API 回應檢查失敗")
-            print(f"  success={data.get('success')}, records存在={bool(data.get('records'))}")
-        
-        weather_data['has_data'] = False
-        
-    except requests.exceptions.RequestException as e:
-        print(f"× 觀測站 API 請求錯誤: {e}")
-        weather_data['has_data'] = False
-    except Exception as e:
-        print(f"× 觀測站數據解析錯誤: {e}")
-        import traceback
-        traceback.print_exc()
-        weather_data['has_data'] = False
                     'has_data': True,
                     'last_fetch': get_taipei_time()
                 }
@@ -635,6 +613,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
