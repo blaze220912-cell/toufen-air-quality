@@ -581,7 +581,88 @@ HTML_TEMPLATE = """
         }
     </style>
     <script>
-        setTimeout(function() { location.reload(); }, 240000);
+        // 更新數據的函數
+        function updateData() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 更新 AQI 數據
+                        if (data.aqi_data.has_data) {
+                            updateElement('[data-aqi]', data.aqi_data.aqi);
+                            updateElement('[data-pm25-avg]', data.aqi_data.pm25_avg);
+                            updateElement('[data-pm10-avg]', data.aqi_data.pm10_avg);
+                            updateElement('[data-pm25]', data.aqi_data.pm25);
+                            updateElement('[data-pm10]', data.aqi_data.pm10);
+                            updateElement('[data-o3]', data.aqi_data.o3);
+                            
+                            // 更新變化量
+                            updateChange('[data-aqi-change]', data.aqi_data.aqi_change);
+                            updateChange('[data-pm25-avg-change]', data.aqi_data.pm25_avg_change);
+                            updateChange('[data-pm10-avg-change]', data.aqi_data.pm10_avg_change);
+                            updateChange('[data-pm25-change]', data.aqi_data.pm25_change);
+                            updateChange('[data-pm10-change]', data.aqi_data.pm10_change);
+                            updateChange('[data-o3-change]', data.aqi_data.o3_change);
+                            
+                            // 更新發布時間
+                            updateElement('[data-publish-time]', data.aqi_data.publish_time);
+                        }
+                        
+                        // 更新天氣數據
+                        if (data.weather_data.has_data) {
+                            updateElement('[data-temp]', data.weather_data.temp);
+                            updateElement('[data-temp-max]', data.weather_data.temp_max);
+                            updateElement('[data-temp-min]', data.weather_data.temp_min);
+                            updateElement('[data-humidity]', data.weather_data.humidity);
+                            updateElement('[data-rain]', data.weather_data.rain);
+                            updateElement('[data-weather-desc]', data.weather_data.weather_desc);
+                            updateElement('[data-wind-speed]', data.weather_data.wind_speed);
+                            updateElement('[data-wind-dir]', data.weather_data.wind_dir);
+                            updateElement('[data-uvi]', data.weather_data.uvi);
+                        }
+                        
+                        // 更新時間戳記
+                        updateElement('[data-page-time]', data.page_load_time);
+                        
+                        console.log('✓ 數據更新成功', new Date().toLocaleTimeString());
+                    }
+                })
+                .catch(error => {
+                    console.error('× 更新失敗:', error);
+                });
+        }
+        
+        // 更新元素內容
+        function updateElement(selector, value) {
+            const el = document.querySelector(selector);
+            if (el && value !== undefined && value !== null) {
+                el.textContent = value;
+            }
+        }
+        
+        // 更新變化量（含顏色）
+        function updateChange(selector, value) {
+            const el = document.querySelector(selector);
+            if (el) {
+                if (value) {
+                    el.textContent = value;
+                    el.style.display = '';
+                    // 更新顏色
+                    el.className = 'data-change';
+                    if (value.includes('↑')) el.className += ' up';
+                    else if (value.includes('↓')) el.className += ' down';
+                    else el.className += ' same';
+                } else {
+                    el.style.display = 'none';
+                }
+            }
+        }
+        
+        // 每 5 分鐘更新一次（300000 毫秒）
+        setInterval(updateData, 300000);
+        
+        // 頁面載入 10 秒後首次更新
+        setTimeout(updateData, 10000);
     </script>
 </head>
 <body>
@@ -591,36 +672,40 @@ HTML_TEMPLATE = """
             <div class="site-info">頭份市</div>
             
             {% if weather.has_data %}
-            <div class="weather-desc-box">{{ weather.weather_desc }}</div>
+            <div class="weather-desc-box"><span data-weather-desc>{{ weather.weather_desc }}</span></div>
             
             <div class="temp-display">
-                <div class="temp-main">{{ weather.temp }}°C</div>
-                <div class="temp-range">↑ {{ weather.temp_max }}°C / ↓ {{ weather.temp_min }}°C</div>
+                <div class="temp-main"><span data-temp>{{ weather.temp }}</span>°C</div>
+                <div class="temp-range">↑ <span data-temp-max>{{ weather.temp_max }}</span>°C / ↓ <span data-temp-min>{{ weather.temp_min }}</span>°C</div>
             </div>
             
             <div class="weather-grid">
                 <div class="weather-item">
                     <span class="weather-label">體感溫度</span>
-                    <span class="weather-value">{{ weather.feels_like }}°C</span>
+                    <span class="weather-value"><span data-feels-like>{{ weather.feels_like }}</span>°C</span>
                 </div>
+                
                 <div class="weather-item humidity">
                     <span class="weather-label">相對濕度</span>
-                    <span class="weather-value">{{ weather.humidity }}%</span>
+                    <span class="weather-value"><span data-humidity>{{ weather.humidity }}</span>%</span>
                 </div>
+                
                 <div class="weather-item rain">
-                     <span class="weather-label">降雨量</span>
-                     <span class="weather-value">{{ weather.rain }} mm</span>
+                    <span class="weather-label">降雨量</span>
+                    <span class="weather-value"><span data-rain>{{ weather.rain }}</span> mm</span>
                 </div>
+                
                 <div class="weather-item wind">
-                    <span class="weather-label">風速 ({{ weather.wind_dir }})</span>
-                    <span class="weather-value">{{ weather.wind_speed }} m/s</span>
+                    <span class="weather-label">風速 (<span data-wind-dir>{{ weather.wind_dir }}</span>)</span>
+                    <span class="weather-value"><span data-wind-speed>{{ weather.wind_speed }}</span> m/s</span>
                 </div>
+                
                 <div class="weather-item uvi {{ weather.uvi_color }}">
                     <div>
                         <div class="weather-label">紫外線 (新竹)</div>
                         <div class="uvi-level">{{ weather.uvi_level }}</div>
                     </div>
-                    <span class="weather-value">{{ weather.uvi }}</span>
+                    <span class="weather-value"><span data-uvi>{{ weather.uvi }}</span></span>
                 </div>
             </div>
             {% else %}
@@ -729,9 +814,9 @@ HTML_TEMPLATE = """
                 <div class="data-card {{ data.aqi_color }}">
                     <div class="data-label">空氣品質指標 (AQI)</div>
                     <div class="data-value">
-                        <span>{{ data.aqi }}</span>
+                        <span data-aqi>{{ data.aqi }}</span>
                         {% if data.aqi_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.aqi_change else ('down' if '↓' in data.aqi_change else 'same') }}">{{ data.aqi_change }}</span>
+                        <span data-aqi-change class="data-change {{ 'up' if '↑' in data.aqi_change else ('down' if '↓' in data.aqi_change else 'same') }}">{{ data.aqi_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">指數</div>
@@ -739,11 +824,11 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm25_avg_color }}">
-                    <div class="data-label">PM2.5 移動平均</div>
+                    <div class="data-label">PM2.5 平均</div>
                     <div class="data-value">
-                        <span>{{ data.pm25_avg }}</span>
+                        <span data-pm25-avg>{{ data.pm25_avg }}</span>
                         {% if data.pm25_avg_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.pm25_avg_change else ('down' if '↓' in data.pm25_avg_change else 'same') }}">{{ data.pm25_avg_change }}</span>
+                        <span data-pm25-avg-change class="data-change {{ 'up' if '↑' in data.pm25_avg_change else ('down' if '↓' in data.pm25_avg_change else 'same') }}">{{ data.pm25_avg_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">μg/m³</div>
@@ -751,11 +836,11 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm10_avg_color }}">
-                    <div class="data-label">PM10 移動平均</div>
+                    <div class="data-label">PM10 平均</div>
                     <div class="data-value">
-                        <span>{{ data.pm10_avg }}</span>
+                        <span data-pm10-avg>{{ data.pm10_avg }}</span>
                         {% if data.pm10_avg_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.pm10_avg_change else ('down' if '↓' in data.pm10_avg_change else 'same') }}">{{ data.pm10_avg_change }}</span>
+                        <span data-pm10-avg-change class="data-change {{ 'up' if '↑' in data.pm10_avg_change else ('down' if '↓' in data.pm10_avg_change else 'same') }}">{{ data.pm10_avg_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">μg/m³</div>
@@ -763,11 +848,11 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm25_color }}">
-                    <div class="data-label">PM2.5 各小時濃度值</div>
+                    <div class="data-label">PM2.5</div>
                     <div class="data-value">
-                        <span>{{ data.pm25 }}</span>
+                        <span data-pm25>{{ data.pm25 }}</span>
                         {% if data.pm25_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.pm25_change else ('down' if '↓' in data.pm25_change else 'same') }}">{{ data.pm25_change }}</span>
+                        <span data-pm25-change class="data-change {{ 'up' if '↑' in data.pm25_change else ('down' if '↓' in data.pm25_change else 'same') }}">{{ data.pm25_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">μg/m³</div>
@@ -777,9 +862,9 @@ HTML_TEMPLATE = """
                 <div class="data-card {{ data.pm10_color }}">
                     <div class="data-label">PM10</div>
                     <div class="data-value">
-                        <span>{{ data.pm10 }}</span>
+                        <span data-pm10>{{ data.pm10 }}</span>
                         {% if data.pm10_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.pm10_change else ('down' if '↓' in data.pm10_change else 'same') }}">{{ data.pm10_change }}</span>
+                        <span data-pm10-change class="data-change {{ 'up' if '↑' in data.pm10_change else ('down' if '↓' in data.pm10_change else 'same') }}">{{ data.pm10_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">μg/m³</div>
@@ -789,9 +874,9 @@ HTML_TEMPLATE = """
                 <div class="data-card {{ data.o3_color }}">
                     <div class="data-label">臭氧 (O₃)</div>
                     <div class="data-value">
-                        <span>{{ data.o3 }}</span>
+                        <span data-o3>{{ data.o3 }}</span>
                         {% if data.o3_change %}
-                        <span class="data-change {{ 'up' if '↑' in data.o3_change else ('down' if '↓' in data.o3_change else 'same') }}">{{ data.o3_change }}</span>
+                        <span data-o3-change class="data-change {{ 'up' if '↑' in data.o3_change else ('down' if '↓' in data.o3_change else 'same') }}">{{ data.o3_change }}</span>
                         {% endif %}
                     </div>
                     <div class="data-unit">ppb</div>
@@ -800,12 +885,12 @@ HTML_TEMPLATE = """
             </div>
             
             <div class="update-info">
-                <div>🖥️ 頁面載入時間：<span class="update-time">{{ page_load_time }}</span></div>
+                <div>🖥️ 頁面載入時間：<span class="update-time" data-page-time>{{ page_load_time }}</span></div>
                 <div style="margin-top: 5px;">📡 資料抓取時間：{{ data.update_time }}</div>
                 {% if data.publish_time != 'N/A' %}
-                <div style="margin-top: 5px;">📊 環境部發布時間：{{ data.publish_time }}</div>
+                <div style="margin-top: 5px;">📊 環境部發布時間：<span data-publish-time>{{ data.publish_time }}</span></div>
                 {% endif %}
-                <div class="refresh-note">⏱️ 資料每5分鐘檢查更新 | 頁面每4分鐘自動刷新</div>
+                <div class="refresh-note">⏱️ 資料每5分鐘自動更新</div>
             </div>
             {% else %}
             <div class="error-message">
@@ -838,6 +923,22 @@ def index():
         bg_image=BACKGROUND_IMAGE if bg_exists else None
     )
 
+@app.route('/api/data')
+def api_data():
+    """返回 JSON 格式的最新數據"""
+    if should_fetch_data():
+        with fetch_lock:
+            if should_fetch_data():
+                fetch_air_quality_data()
+                fetch_weather_data()
+    
+    return {
+        'success': True,
+        'aqi_data': latest_data,
+        'weather_data': weather_data,
+        'page_load_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
 @app.route('/background')
 def background():
     if os.path.exists(BACKGROUND_IMAGE):
@@ -853,6 +954,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
