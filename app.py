@@ -382,17 +382,3 @@ fetch_air_quality_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-```
-
-## **修改重點：**
-
-✅ **使用 `timezone(timedelta(hours=8))` 設定 UTC+8**  
-✅ **所有時間都透過 `get_taipei_time()` 取得台北時間**  
-✅ **不需要額外安裝 pytz 套件**
-
-`requirements.txt` 維持原樣就好：
-```
-Flask==3.0.0
-requests==2.31.0
-urllib3==2.1.0
-gunicorn==21.2.0
