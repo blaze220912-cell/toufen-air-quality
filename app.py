@@ -549,7 +549,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="container">
-            <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+            <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50">
   <!-- 主要雲朵 -->
   <defs>
     <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -772,6 +772,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
