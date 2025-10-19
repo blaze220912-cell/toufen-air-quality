@@ -113,7 +113,36 @@ def fetch_weather_forecast():
                 weather_element = next((e for e in weather_elements if e['ElementName'] == '天氣現象'), None)
                 pop_element = next((e for e in weather_elements if e['ElementName'] == '3小時降雨機率'), None)
                 
-                # 取第一筆資料
+                # 找出最接近當前時間的預報
+                current_time = get_taipei_time()
+                
+                # 取得所有時間資料
+                temp_times = temp_element['Time'] if temp_element else []
+                
+                # 找出最接近當前時間且不早於當前時間的預報
+                closest_index = 0
+                min_diff = float('inf')
+                
+                for i, time_data in enumerate(temp_times):
+                    try:
+                        forecast_dt = datetime.strptime(time_data.get('DataTime', ''), '%Y-%m-%dT%H:%M:%S%z')
+                        # 移除時區資訊以便比較
+                        forecast_dt_naive = forecast_dt.replace(tzinfo=None)
+                        current_time_naive = current_time.replace(tzinfo=None)
+                        
+                        # 計算時間差(只取未來或當前的預報)
+                        diff = (forecast_dt_naive - current_time_naive).total_seconds()
+                        
+                        # 找最接近且不早於當前時間的
+                        if diff >= 0 and diff < min_diff:
+                            min_diff = diff
+                            closest_index = i
+                    except:
+                        continue
+                
+                print(f"  找到最接近的預報: 索引 {closest_index}, 時間差 {min_diff/60:.1f} 分鐘")
+                
+                # 取得最接近的時間資料
                 forecast_time = 'N/A'
                 temp = 'N/A'
                 feels_like = 'N/A'
@@ -126,8 +155,8 @@ def fetch_weather_forecast():
                 weather_desc = 'N/A'
                 pop = 'N/A'
                 
-                if temp_element and len(temp_element['Time']) > 0:
-                    first_time = temp_element['Time'][0]
+                if temp_element and len(temp_element['Time']) > closest_index:
+                    first_time = temp_element['Time'][closest_index]
                     forecast_time_raw = first_time.get('DataTime', 'N/A')
                     temp = first_time['ElementValue'][0].get('Temperature', 'N/A')
                     
@@ -138,32 +167,32 @@ def fetch_weather_forecast():
                     except:
                         forecast_time = forecast_time_raw
                     
-                    print(f"  預報時間: {forecast_time}, 取得第一筆資料")
+                    print(f"  預報時間: {forecast_time}, 溫度: {temp}°C")
                 
-                if feels_element and len(feels_element['Time']) > 0:
-                    feels_like = feels_element['Time'][0]['ElementValue'][0].get('ApparentTemperature', 'N/A')
+                if feels_element and len(feels_element['Time']) > closest_index:
+                    feels_like = feels_element['Time'][closest_index]['ElementValue'][0].get('ApparentTemperature', 'N/A')
                 
-                if comfort_element and len(comfort_element['Time']) > 0:
-                    comfort_value = comfort_element['Time'][0]['ElementValue'][0]
+                if comfort_element and len(comfort_element['Time']) > closest_index:
+                    comfort_value = comfort_element['Time'][closest_index]['ElementValue'][0]
                     comfort_index = comfort_value.get('ComfortIndex', 'N/A')
                     comfort_desc = comfort_value.get('ComfortIndexDescription', '無資料')
                 
-                if humidity_element and len(humidity_element['Time']) > 0:
-                    humidity = humidity_element['Time'][0]['ElementValue'][0].get('RelativeHumidity', 'N/A')
+                if humidity_element and len(humidity_element['Time']) > closest_index:
+                    humidity = humidity_element['Time'][closest_index]['ElementValue'][0].get('RelativeHumidity', 'N/A')
                 
-                if wind_speed_element and len(wind_speed_element['Time']) > 0:
-                    wind_value = wind_speed_element['Time'][0]['ElementValue'][0]
+                if wind_speed_element and len(wind_speed_element['Time']) > closest_index:
+                    wind_value = wind_speed_element['Time'][closest_index]['ElementValue'][0]
                     wind_speed = wind_value.get('WindSpeed', 'N/A')
                     wind_scale = wind_value.get('BeaufortScale', 'N/A')
                 
-                if wind_dir_element and len(wind_dir_element['Time']) > 0:
-                    wind_dir = wind_dir_element['Time'][0]['ElementValue'][0].get('WindDirection', 'N/A')
+                if wind_dir_element and len(wind_dir_element['Time']) > closest_index:
+                    wind_dir = wind_dir_element['Time'][closest_index]['ElementValue'][0].get('WindDirection', 'N/A')
                 
-                if weather_element and len(weather_element['Time']) > 0:
-                    weather_desc = weather_element['Time'][0]['ElementValue'][0].get('Weather', 'N/A')
+                if weather_element and len(weather_element['Time']) > closest_index:
+                    weather_desc = weather_element['Time'][closest_index]['ElementValue'][0].get('Weather', 'N/A')
                 
-                if pop_element and len(pop_element['Time']) > 0:
-                    pop = pop_element['Time'][0]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
+                if pop_element and len(pop_element['Time']) > closest_index:
+                    pop = pop_element['Time'][closest_index]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
                 
                 # 組合風速風向顯示
                 if wind_dir != 'N/A' and wind_speed != 'N/A' and wind_scale != 'N/A':
