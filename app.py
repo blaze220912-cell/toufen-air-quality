@@ -549,7 +549,99 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="container">
-            <h1>🌤️ 空氣品質監測</h1>
+            <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- 主要雲朵 -->
+  <defs>
+    <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8F4F8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B8D4E0;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="particleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD93D;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#FFA83D;stop-opacity:0.8" />
+    </linearGradient>
+    
+    <!-- 陰影濾鏡 -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 雲朵形狀 -->
+  <g filter="url(#shadow)">
+    <!-- 雲朵主體 -->
+    <ellipse cx="35" cy="45" rx="18" ry="15" fill="url(#cloudGradient)"/>
+    <ellipse cx="50" cy="40" rx="20" ry="18" fill="url(#cloudGradient)"/>
+    <ellipse cx="65" cy="45" rx="18" ry="15" fill="url(#cloudGradient)"/>
+    <rect x="25" y="45" width="50" height="15" fill="url(#cloudGradient)"/>
+    
+    <!-- 雲朵底部圓角 -->
+    <ellipse cx="30" cy="60" rx="10" ry="8" fill="url(#cloudGradient)"/>
+    <ellipse cx="50" cy="62" rx="15" ry="10" fill="url(#cloudGradient)"/>
+    <ellipse cx="70" cy="60" rx="10" ry="8" fill="url(#cloudGradient)"/>
+  </g>
+  
+  <!-- 空氣粒子 - 小圓點 -->
+  <g opacity="0.9">
+    <!-- 大顆粒子 -->
+    <circle cx="25" cy="70" r="3.5" fill="url(#particleGradient)">
+      <animate attributeName="cy" values="70;75;70" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="45" cy="75" r="4" fill="url(#particleGradient)">
+      <animate attributeName="cy" values="75;80;75" dur="2.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;1;0.7" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="65" cy="72" r="3" fill="url(#particleGradient)">
+      <animate attributeName="cy" values="72;77;72" dur="2.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.5;0.9;0.5" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- 小顆粒子 -->
+    <circle cx="35" cy="78" r="2.5" fill="#FFB84D" opacity="0.7">
+      <animate attributeName="cy" values="78;82;78" dur="3.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3.2s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="55" cy="80" r="2" fill="#FFB84D" opacity="0.6">
+      <animate attributeName="cy" values="80;84;80" dur="2.7s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.7s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="75" cy="76" r="2.5" fill="#FFCC5C" opacity="0.6">
+      <animate attributeName="cy" values="76;80;76" dur="3.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3.5s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- 微小粒子 -->
+    <circle cx="20" cy="65" r="1.5" fill="#FFD93D" opacity="0.5">
+      <animate attributeName="cy" values="65;68;65" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="70" cy="68" r="1.5" fill="#FFD93D" opacity="0.5">
+      <animate attributeName="cy" values="68;71;68" dur="2.9s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="50" cy="85" r="1.8" fill="#FFA83D" opacity="0.5">
+      <animate attributeName="cy" values="85;88;85" dur="3.3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- 高光效果 -->
+  <ellipse cx="45" cy="38" rx="12" ry="6" fill="white" opacity="0.4"/>
+  <ellipse cx="60" cy="42" rx="8" ry="4" fill="white" opacity="0.3"/>
+</svg> 空氣品質監測</h1>
             <div class="site-info">監測站點：{{ data.site_name }}</div>
             
             {% if data.has_data %}
@@ -567,7 +659,7 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm25_avg_color }}">
-                    <div class="data-label">PM2.5 平均</div>
+                    <div class="data-label">PM2.5 移動平均</div>
                     <div class="data-value">
                         <span>{{ data.pm25_avg }}</span>
                         {% if data.pm25_avg_change %}
@@ -579,7 +671,7 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm10_avg_color }}">
-                    <div class="data-label">PM10 平均</div>
+                    <div class="data-label">PM10 移動平均</div>
                     <div class="data-value">
                         <span>{{ data.pm10_avg }}</span>
                         {% if data.pm10_avg_change %}
@@ -591,7 +683,7 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <div class="data-card {{ data.pm25_color }}">
-                    <div class="data-label">PM2.5</div>
+                    <div class="data-label">PM2.5 各小時濃度值</div>
                     <div class="data-value">
                         <span>{{ data.pm25 }}</span>
                         {% if data.pm25_change %}
@@ -680,6 +772,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
