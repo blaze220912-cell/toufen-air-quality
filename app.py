@@ -12,6 +12,7 @@ app = Flask(__name__)
 TAIPEI_TZ = timezone(timedelta(hours=8))
 BACKGROUND_IMAGE = "background.jpg"
 
+# 空氣品質數據(右側 - 保留原樣)
 latest_data = {
     'aqi': 'N/A', 'pm25_avg': 'N/A', 'pm10_avg': 'N/A',
     'pm10': 'N/A', 'pm25': 'N/A', 'o3': 'N/A',
@@ -20,26 +21,19 @@ latest_data = {
 }
 
 previous_data = {
-    'aqi': None,
-    'pm25_avg': None,
-    'pm10_avg': None,
-    'pm10': None,
-    'pm25': None,
-    'o3': None,
-    'base_hour': None  # 記錄基準值是哪個小時
+    'aqi': None, 'pm25_avg': None, 'pm10_avg': None,
+    'pm10': None, 'pm25': None, 'o3': None,
+    'base_hour': None
 }
 
-# 基準值檔案路徑
 BASELINE_FILE = 'baseline_data.json'
 
-# 載入基準值
 def load_baseline():
     global previous_data
     if os.path.exists(BASELINE_FILE):
         try:
             with open(BASELINE_FILE, 'r') as f:
                 saved_data = json.load(f)
-                # 轉換 base_hour 字串回 datetime
                 if saved_data.get('base_hour'):
                     saved_data['base_hour'] = datetime.fromisoformat(saved_data['base_hour'])
                 previous_data.update(saved_data)
@@ -47,11 +41,9 @@ def load_baseline():
         except Exception as e:
             print(f"× 載入基準值失敗: {e}")
 
-# 儲存基準值
 def save_baseline():
     try:
         saved_data = previous_data.copy()
-        # 轉換 datetime 為字串
         if saved_data.get('base_hour'):
             saved_data['base_hour'] = saved_data['base_hour'].isoformat()
         with open(BASELINE_FILE, 'w') as f:
@@ -60,22 +52,148 @@ def save_baseline():
     except Exception as e:
         print(f"× 儲存基準值失敗: {e}")
 
-weather_data = {
-    'temp': 'N/A', 'temp_max': 'N/A', 'temp_min': 'N/A',
-    'feels_like': 'N/A', 'humidity': 'N/A', 'pop': 'N/A',
-    'weather_desc': 'N/A', 'wind_speed': 'N/A', 'wind_dir': 'N/A',
-    'uvi': 'N/A', 'has_data': False, 'last_fetch': None
+# 天氣預報數據(左側 - 修改為預報)
+forecast_data = {
+    'temp': 'N/A', 'feels_like': 'N/A',
+    'comfort_index': 'N/A', 'comfort_desc': '無資料',
+    'comfort_emoji': '❓', 'comfort_color': 'gray',
+    'humidity': 'N/A', 'wind_display': 'N/A',
+    'weather_desc': 'N/A', 'pop': 'N/A',
+    'forecast_time': 'N/A',
+    'has_data': False, 'last_fetch': None
 }
 
 fetch_lock = Lock()
 
 AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
-WEATHER_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&StationId=C0E730"
-UVI_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&StationId=467571"
+FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 
 def get_taipei_time():
     return datetime.now(TAIPEI_TZ)
 
+# 取得舒適度表情與顏色
+def get_comfort_emoji_color(desc):
+    desc_lower = desc.lower() if desc else ''
+    
+    if '舒適' in desc or 'comfortable' in desc_lower:
+        return '😊', 'green'
+    elif '悶熱' in desc or '悶' in desc:
+        return '😓', 'orange'
+    elif '易中暑' in desc or '炎熱' in desc:
+        return '🥵', 'red'
+    elif '寒冷' in desc or '冷' in desc:
+        return '🥶', 'blue'
+    else:
+        return '😐', 'yellow'
+
+# 抓取天氣預報(左側)
+def fetch_weather_forecast():
+    global forecast_data
+    try:
+        print(f"正在呼叫頭份預報 API...")
+        response = requests.get(FORECAST_API_URL, timeout=10)
+        print(f"預報 API 狀態碼: {response.status_code}")
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('success') == 'true' and data.get('records'):
+            locations = data['records']['Locations'][0]['Location']
+            
+            if len(locations) > 0:
+                location = locations[0]
+                weather_elements = location['WeatherElement']
+                
+                # 取得第一筆時間資料(最接近當前)
+                temp_element = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
+                feels_element = next((e for e in weather_elements if e['ElementName'] == '體感溫度'), None)
+                comfort_element = next((e for e in weather_elements if e['ElementName'] == '舒適度指數'), None)
+                humidity_element = next((e for e in weather_elements if e['ElementName'] == '相對濕度'), None)
+                wind_speed_element = next((e for e in weather_elements if e['ElementName'] == '風速'), None)
+                wind_dir_element = next((e for e in weather_elements if e['ElementName'] == '風向'), None)
+                weather_element = next((e for e in weather_elements if e['ElementName'] == '天氣現象'), None)
+                pop_element = next((e for e in weather_elements if e['ElementName'] == '3小時降雨機率'), None)
+                
+                # 取第一筆資料
+                forecast_time = 'N/A'
+                temp = 'N/A'
+                feels_like = 'N/A'
+                comfort_index = 'N/A'
+                comfort_desc = '無資料'
+                humidity = 'N/A'
+                wind_speed = 'N/A'
+                wind_scale = 'N/A'
+                wind_dir = 'N/A'
+                weather_desc = 'N/A'
+                pop = 'N/A'
+                
+                if temp_element and len(temp_element['Time']) > 0:
+                    first_time = temp_element['Time'][0]
+                    forecast_time = first_time.get('DataTime', 'N/A')
+                    temp = first_time['ElementValue'][0].get('Temperature', 'N/A')
+                
+                if feels_element and len(feels_element['Time']) > 0:
+                    feels_like = feels_element['Time'][0]['ElementValue'][0].get('ApparentTemperature', 'N/A')
+                
+                if comfort_element and len(comfort_element['Time']) > 0:
+                    comfort_value = comfort_element['Time'][0]['ElementValue'][0]
+                    comfort_index = comfort_value.get('ComfortIndex', 'N/A')
+                    comfort_desc = comfort_value.get('ComfortIndexDescription', '無資料')
+                
+                if humidity_element and len(humidity_element['Time']) > 0:
+                    humidity = humidity_element['Time'][0]['ElementValue'][0].get('RelativeHumidity', 'N/A')
+                
+                if wind_speed_element and len(wind_speed_element['Time']) > 0:
+                    wind_value = wind_speed_element['Time'][0]['ElementValue'][0]
+                    wind_speed = wind_value.get('WindSpeed', 'N/A')
+                    wind_scale = wind_value.get('BeaufortScale', 'N/A')
+                
+                if wind_dir_element and len(wind_dir_element['Time']) > 0:
+                    wind_dir = wind_dir_element['Time'][0]['ElementValue'][0].get('WindDirection', 'N/A')
+                
+                if weather_element and len(weather_element['Time']) > 0:
+                    weather_desc = weather_element['Time'][0]['ElementValue'][0].get('Weather', 'N/A')
+                
+                if pop_element and len(pop_element['Time']) > 0:
+                    pop = pop_element['Time'][0]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
+                
+                # 組合風速風向顯示
+                if wind_dir != 'N/A' and wind_speed != 'N/A' and wind_scale != 'N/A':
+                    wind_display = f"{wind_dir} 平均風速{wind_scale}級(每秒{wind_speed}公尺)"
+                else:
+                    wind_display = 'N/A'
+                
+                # 取得舒適度表情
+                comfort_emoji, comfort_color = get_comfort_emoji_color(comfort_desc)
+                
+                forecast_data = {
+                    'temp': temp,
+                    'feels_like': feels_like,
+                    'comfort_index': comfort_index,
+                    'comfort_desc': comfort_desc,
+                    'comfort_emoji': comfort_emoji,
+                    'comfort_color': comfort_color,
+                    'humidity': humidity,
+                    'wind_display': wind_display,
+                    'weather_desc': weather_desc,
+                    'pop': pop,
+                    'forecast_time': forecast_time,
+                    'has_data': True,
+                    'last_fetch': get_taipei_time()
+                }
+                
+                print(f"✓ 預報數據更新成功")
+                print(f"  溫度: {temp}°C, 舒適度: {comfort_desc}")
+                return
+        
+        forecast_data['has_data'] = False
+        
+    except Exception as e:
+        print(f"× 抓取預報數據失敗: {e}")
+        import traceback
+        traceback.print_exc()
+        forecast_data['has_data'] = False
+
+# 抓取空氣品質(右側 - 保持原樣)
 def fetch_air_quality_data():
     global latest_data, previous_data
     try:
@@ -96,7 +214,6 @@ def fetch_air_quality_data():
             else:
                 record = records[0]
             
-            # 取得數值
             aqi = record.get('aqi', 'N/A')
             pm25 = record.get('pm2.5', 'N/A')
             pm25_avg = record.get('pm2.5_avg', 'N/A')
@@ -104,7 +221,6 @@ def fetch_air_quality_data():
             pm10_avg = record.get('pm10_avg', 'N/A')
             o3 = record.get('o3', 'N/A')
             
-            # 從發布時間取得數據的整點小時
             publish_time_str = record.get('publishtime', '')
             try:
                 publish_dt = datetime.strptime(publish_time_str, '%Y-%m-%d %H:%M')
@@ -112,7 +228,6 @@ def fetch_air_quality_data():
             except:
                 data_hour = get_taipei_time().replace(minute=0, second=0, microsecond=0)
             
-            # 計算變化值函數
             def calculate_change(current, previous):
                 if current == 'N/A' or current == '' or previous is None:
                     return None
@@ -129,10 +244,8 @@ def fetch_air_quality_data():
                 except:
                     return None
             
-            # 判斷是否需要更新基準值
             if previous_data['base_hour'] is None:
-                # 第一次執行，設定基準值
-                print(f"首次執行，設定基準值為 {data_hour.strftime('%H:00')}")
+                print(f"首次執行,設定基準值為 {data_hour.strftime('%H:00')}")
                 try:
                     if aqi != 'N/A' and aqi != '':
                         previous_data['aqi'] = float(aqi)
@@ -151,7 +264,6 @@ def fetch_air_quality_data():
                     pass
                 save_baseline()
                 
-                # 第一次執行，變化量為 None
                 aqi_change = None
                 pm25_avg_change = None
                 pm10_avg_change = None
@@ -160,10 +272,8 @@ def fetch_air_quality_data():
                 o3_change = None
                 
             elif data_hour > previous_data['base_hour']:
-                # 跨越新整點
                 print(f"跨越新整點: {previous_data['base_hour'].strftime('%H:00')} → {data_hour.strftime('%H:00')}")
                 
-                # 先計算變化量（用舊基準值）
                 aqi_change = calculate_change(aqi, previous_data['aqi'])
                 pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
                 pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
@@ -171,7 +281,6 @@ def fetch_air_quality_data():
                 pm25_change = calculate_change(pm25, previous_data['pm25'])
                 o3_change = calculate_change(o3, previous_data['o3'])
                 
-                # 再更新基準值為當前數據
                 try:
                     if aqi != 'N/A' and aqi != '':
                         previous_data['aqi'] = float(aqi)
@@ -191,7 +300,6 @@ def fetch_air_quality_data():
                 save_baseline()
                 
             else:
-                # 同一整點小時內，計算變化量（會是 0）
                 aqi_change = calculate_change(aqi, previous_data['aqi'])
                 pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
                 pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
@@ -199,7 +307,6 @@ def fetch_air_quality_data():
                 pm25_change = calculate_change(pm25, previous_data['pm25'])
                 o3_change = calculate_change(o3, previous_data['o3'])
             
-            # 計算顏色等級和文字標籤
             def get_level_info(value, thresholds, labels):
                 if value == 'N/A' or value == '':
                     return 'gray', '無資料'
@@ -224,30 +331,12 @@ def fetch_air_quality_data():
             o3_color, o3_label = get_level_info(o3, [54, 70, 85], ['良好', '普通', '對敏感族群不健康', '不健康'])
             
             latest_data = {
-                'aqi': aqi,
-                'aqi_color': aqi_color,
-                'aqi_label': aqi_label,
-                'aqi_change': aqi_change,
-                'pm25_avg': pm25_avg,
-                'pm25_avg_color': pm25_avg_color,
-                'pm25_avg_label': pm25_avg_label,
-                'pm25_avg_change': pm25_avg_change,
-                'pm10_avg': pm10_avg,
-                'pm10_avg_color': pm10_avg_color,
-                'pm10_avg_label': pm10_avg_label,
-                'pm10_avg_change': pm10_avg_change,
-                'pm10': pm10,
-                'pm10_color': pm10_color,
-                'pm10_label': pm10_label,
-                'pm10_change': pm10_change,
-                'pm25': pm25,
-                'pm25_color': pm25_color,
-                'pm25_label': pm25_label,
-                'pm25_change': pm25_change,
-                'o3': o3,
-                'o3_color': o3_color,
-                'o3_label': o3_label,
-                'o3_change': o3_change,
+                'aqi': aqi, 'aqi_color': aqi_color, 'aqi_label': aqi_label, 'aqi_change': aqi_change,
+                'pm25_avg': pm25_avg, 'pm25_avg_color': pm25_avg_color, 'pm25_avg_label': pm25_avg_label, 'pm25_avg_change': pm25_avg_change,
+                'pm10_avg': pm10_avg, 'pm10_avg_color': pm10_avg_color, 'pm10_avg_label': pm10_avg_label, 'pm10_avg_change': pm10_avg_change,
+                'pm10': pm10, 'pm10_color': pm10_color, 'pm10_label': pm10_label, 'pm10_change': pm10_change,
+                'pm25': pm25, 'pm25_color': pm25_color, 'pm25_label': pm25_label, 'pm25_change': pm25_change,
+                'o3': o3, 'o3_color': o3_color, 'o3_label': o3_label, 'o3_change': o3_change,
                 'update_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S'),
                 'site_name': record.get('sitename', '頭份'),
                 'publish_time': record.get('publishtime', 'N/A'),
@@ -256,7 +345,6 @@ def fetch_air_quality_data():
             }
             
             print(f"AQI 數據更新成功")
-            print(f"數據時間: {data_hour.strftime('%H:00')}, 基準時間: {previous_data['base_hour'].strftime('%H:00')}, AQI變化: {aqi_change}")
             
         else:
             latest_data['has_data'] = False
@@ -266,151 +354,8 @@ def fetch_air_quality_data():
         traceback.print_exc()
         latest_data['has_data'] = False
 
-def fetch_weather_data():
-    global weather_data
-    try:
-        print(f"正在呼叫頭份觀測站 API...")
-        
-        # 抓取頭份觀測站即時資料
-        response = requests.get(WEATHER_API_URL, timeout=10)
-        print(f"觀測站 API 狀態碼: {response.status_code}")
-        response.raise_for_status()
-        data = response.json()
-        
-        # 檢查回應
-        print(f"API success 值: {data.get('success')}")
-        print(f"有 records: {bool(data.get('records'))}")
-        
-        # 抓取新竹 UVI
-        try:
-            uvi_response = requests.get(UVI_API_URL, timeout=10)
-            uvi_data = uvi_response.json()
-        except:
-            uvi_data = {}
-        
-        # 修正：success 是字串，且要檢查 records
-        if data.get('success') == 'true' and 'records' in data:
-            records = data.get('records', {})
-            stations = records.get('Station', [])
-            
-            print(f"找到 {len(stations)} 個觀測站")
-            
-            if len(stations) > 0:
-                station = stations[0]
-                print(f"測站名稱: {station.get('StationName')}")
-                
-                obs_time = station.get('ObsTime', {}).get('DateTime', 'N/A')
-                weather_element = station.get('WeatherElement', {})
-                
-                # 取得各項氣象觀測資料
-                temp = weather_element.get('AirTemperature', 'N/A')
-                humidity = weather_element.get('RelativeHumidity', 'N/A')
-                wind_speed = weather_element.get('WindSpeed', 'N/A')
-                wind_dir = weather_element.get('WindDirection', 'N/A')
-                weather_desc = weather_element.get('Weather', '觀測中')
-                
-                # 取得當日最高/最低溫
-                daily_extreme = weather_element.get('DailyExtreme', {})
-                daily_high_info = daily_extreme.get('DailyHigh', {}).get('TemperatureInfo', {})
-                daily_low_info = daily_extreme.get('DailyLow', {}).get('TemperatureInfo', {})
-                daily_high = daily_high_info.get('AirTemperature', 'N/A')
-                daily_low = daily_low_info.get('AirTemperature', 'N/A')
-                
-                # 取得降雨量
-                now_info = weather_element.get('Now', {})
-                precipitation = now_info.get('Precipitation', 'N/A')
-                
-                # 風向轉換（度數轉方位）
-                def degree_to_direction(degree):
-                    if degree == 'N/A' or degree == '-99' or degree == -99:
-                        return 'N/A'
-                    try:
-                        deg = float(degree)
-                        directions = ['北', '北北東', '東北', '東北東', '東', '東南東', '東南', '南南東',
-                                    '南', '南南西', '西南', '西南西', '西', '西北西', '西北', '北北西']
-                        index = round(deg / 22.5) % 16
-                        return directions[index]
-                    except:
-                        return 'N/A'
-                
-                wind_dir_text = degree_to_direction(wind_dir)
-                
-                # 取得 UVI（新竹測站 - O-A0003-001）
-                uvi = 'N/A'
-                uvi_level = '無資料'
-                uvi_color = 'gray'
-                
-                if uvi_data.get('success') == 'true' and uvi_data.get('records'):
-                    uvi_stations = uvi_data['records'].get('Station', [])
-                    for uvi_station in uvi_stations:
-                        station_name = uvi_station.get('StationName', '')
-                        station_id = uvi_station.get('StationId', '')
-                        if '新竹' in station_name or station_id == '467571':
-                            weather_element_uvi = uvi_station.get('WeatherElement', {})
-                            uvi_value = weather_element_uvi.get('UVIndex', 'N/A')
-                            
-                            if uvi_value and uvi_value != '-99' and uvi_value != 'N/A':
-                                try:
-                                    uvi_num = float(uvi_value)
-                                    uvi = str(uvi_num)
-                                    
-                                    # UVI 分級
-                                    if uvi_num <= 2:
-                                        uvi_level = '低量級'
-                                        uvi_color = 'green'
-                                    elif uvi_num <= 5:
-                                        uvi_level = '中量級'
-                                        uvi_color = 'yellow'
-                                    elif uvi_num <= 7:
-                                        uvi_level = '高量級'
-                                        uvi_color = 'orange'
-                                    elif uvi_num <= 10:
-                                        uvi_level = '過量級'
-                                        uvi_color = 'red'
-                                    else:
-                                        uvi_level = '危險級'
-                                        uvi_color = 'purple'
-                                except:
-                                    pass
-                            break
-                
-                weather_data = {
-                    'temp': temp,
-                    'temp_max': daily_high,
-                    'temp_min': daily_low,
-                    'feels_like': temp,
-                    'humidity': humidity,
-                    'rain': precipitation,
-                    'weather_desc': weather_desc,
-                    'wind_speed': wind_speed,
-                    'wind_dir': wind_dir_text,
-                    'uvi': uvi,
-                    'uvi_level': uvi_level,
-                    'uvi_color': uvi_color,
-                    'has_data': True,
-                    'last_fetch': get_taipei_time()
-                }
-                print(f"✓ 頭份觀測站數據更新成功")
-                print(f"  溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
-                return
-            else:
-                print("× 沒有找到觀測站資料")
-        else:
-            print(f"× API 回應檢查失敗")
-            print(f"  success={data.get('success')}, records存在={bool(data.get('records'))}")
-        
-        weather_data['has_data'] = False
-        
-    except requests.exceptions.RequestException as e:
-        print(f"× 觀測站 API 請求錯誤: {e}")
-        weather_data['has_data'] = False
-    except Exception as e:
-        print(f"× 觀測站數據解析錯誤: {e}")
-        import traceback
-        traceback.print_exc()
-        weather_data['has_data'] = False
 def should_fetch_data():
-    if latest_data['last_fetch'] is None or weather_data['last_fetch'] is None:
+    if latest_data['last_fetch'] is None or forecast_data['last_fetch'] is None:
         return True
     return get_taipei_time() - latest_data['last_fetch'] > timedelta(minutes=5)
 
@@ -469,33 +414,21 @@ HTML_TEMPLATE = """
             justify-content: space-between;
             align-items: center;
         }
+        .weather-item.temp { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .weather-item.feels { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .weather-item.comfort.green { background: linear-gradient(135deg, #00d084 0%, #00a86b 100%); }
+        .weather-item.comfort.yellow { background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%); }
+        .weather-item.comfort.orange { background: linear-gradient(135deg, #ff8c00 0%, #ff6b00 100%); }
+        .weather-item.comfort.red { background: linear-gradient(135deg, #ff4757 0%, #e84118 100%); }
+        .weather-item.comfort.blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .weather-item.comfort.gray { background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); }
         .weather-item.humidity { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .weather-item.rain { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
-        .weather-item.wind { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .weather-item.uvi.green { background: linear-gradient(135deg, #00d084 0%, #00a86b 100%); }
-        .weather-item.uvi.yellow { background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%); }
-        .weather-item.uvi.orange { background: linear-gradient(135deg, #ff8c00 0%, #ff6b00 100%); }
-        .weather-item.uvi.red { background: linear-gradient(135deg, #ff4757 0%, #e84118 100%); }
-        .weather-item.uvi.purple { background: linear-gradient(135deg, #a55eea 0%, #8854d0 100%); }
-        .weather-item.uvi.gray { background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); }
-
-.uvi-level {
-    font-size: 0.8em;
-    margin-top: 5px;
-    opacity: 0.9;
-}
+        .weather-item.wind { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
+        .weather-item.pop { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
         .weather-label { font-size: 0.9em; opacity: 0.9; }
         .weather-value { font-size: 1.5em; font-weight: bold; }
-        .temp-display {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            margin-bottom: 15px;
-        }
-        .temp-main { font-size: 3em; font-weight: bold; }
-        .temp-range { font-size: 1em; margin-top: 10px; opacity: 0.9; }
+        .weather-value-large { font-size: 2em; font-weight: bold; }
+        .comfort-emoji { font-size: 2.5em; }
         .weather-desc-box {
             background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
             color: #333;
@@ -505,6 +438,15 @@ HTML_TEMPLATE = """
             font-size: 1.2em;
             font-weight: bold;
             margin-bottom: 15px;
+        }
+        .forecast-time {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
         }
         
         .data-grid {
@@ -542,7 +484,7 @@ HTML_TEMPLATE = """
             font-weight: normal;
             padding: 3px 8px;
             border-radius: 5px;
-            white-space: nowrap;
+            whitespace: nowrap;
         }
         .data-change.up { color: #c0392b; background: rgba(192, 57, 43, 0.2); }
         .data-change.down { color: #27ae60; background: rgba(39, 174, 96, 0.2); }
@@ -581,13 +523,11 @@ HTML_TEMPLATE = """
         }
     </style>
     <script>
-        // 更新數據的函數
         function updateData() {
             fetch('/api/data')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // 更新 AQI 數據
                         if (data.aqi_data.has_data) {
                             updateElement('[data-aqi]', data.aqi_data.aqi);
                             updateElement('[data-pm25-avg]', data.aqi_data.pm25_avg);
@@ -596,7 +536,6 @@ HTML_TEMPLATE = """
                             updateElement('[data-pm10]', data.aqi_data.pm10);
                             updateElement('[data-o3]', data.aqi_data.o3);
                             
-                            // 更新變化量
                             updateChange('[data-aqi-change]', data.aqi_data.aqi_change);
                             updateChange('[data-pm25-avg-change]', data.aqi_data.pm25_avg_change);
                             updateChange('[data-pm10-avg-change]', data.aqi_data.pm10_avg_change);
@@ -604,24 +543,22 @@ HTML_TEMPLATE = """
                             updateChange('[data-pm10-change]', data.aqi_data.pm10_change);
                             updateChange('[data-o3-change]', data.aqi_data.o3_change);
                             
-                            // 更新發布時間
                             updateElement('[data-publish-time]', data.aqi_data.publish_time);
                         }
                         
-                        // 更新天氣數據
-                        if (data.weather_data.has_data) {
-                            updateElement('[data-temp]', data.weather_data.temp);
-                            updateElement('[data-temp-max]', data.weather_data.temp_max);
-                            updateElement('[data-temp-min]', data.weather_data.temp_min);
-                            updateElement('[data-humidity]', data.weather_data.humidity);
-                            updateElement('[data-rain]', data.weather_data.rain);
-                            updateElement('[data-weather-desc]', data.weather_data.weather_desc);
-                            updateElement('[data-wind-speed]', data.weather_data.wind_speed);
-                            updateElement('[data-wind-dir]', data.weather_data.wind_dir);
-                            updateElement('[data-uvi]', data.weather_data.uvi);
+                        if (data.forecast_data.has_data) {
+                            updateElement('[data-forecast-temp]', data.forecast_data.temp);
+                            updateElement('[data-forecast-feels]', data.forecast_data.feels_like);
+                            updateElement('[data-forecast-comfort]', data.forecast_data.comfort_index);
+                            updateElement('[data-forecast-comfort-desc]', data.forecast_data.comfort_desc);
+                            updateElement('[data-forecast-comfort-emoji]', data.forecast_data.comfort_emoji);
+                            updateElement('[data-forecast-humidity]', data.forecast_data.humidity);
+                            updateElement('[data-forecast-wind]', data.forecast_data.wind_display);
+                            updateElement('[data-forecast-weather]', data.forecast_data.weather_desc);
+                            updateElement('[data-forecast-pop]', data.forecast_data.pop);
+                            updateElement('[data-forecast-time]', data.forecast_data.forecast_time);
                         }
                         
-                        // 更新時間戳記
                         updateElement('[data-page-time]', data.page_load_time);
                         
                         console.log('✓ 數據更新成功', new Date().toLocaleTimeString());
@@ -632,7 +569,6 @@ HTML_TEMPLATE = """
                 });
         }
         
-        // 更新元素內容
         function updateElement(selector, value) {
             const el = document.querySelector(selector);
             if (el && value !== undefined && value !== null) {
@@ -640,14 +576,12 @@ HTML_TEMPLATE = """
             }
         }
         
-        // 更新變化量（含顏色）
         function updateChange(selector, value) {
             const el = document.querySelector(selector);
             if (el) {
                 if (value) {
                     el.textContent = value;
                     el.style.display = '';
-                    // 更新顏色
                     el.className = 'data-change';
                     if (value.includes('↑')) el.className += ' up';
                     else if (value.includes('↓')) el.className += ' down';
@@ -658,76 +592,75 @@ HTML_TEMPLATE = """
             }
         }
         
-        // 每 5 分鐘更新一次（300000 毫秒）
         setInterval(updateData, 300000);
-        
-        // 頁面載入 10 秒後首次更新
         setTimeout(updateData, 10000);
     </script>
 </head>
 <body>
     <div class="main-container">
         <div class="weather-container">
-            <h2>🌤️ 天氣概況</h2>
+            <h2>🌤️ 天氣預報</h2>
             <div class="site-info">頭份市</div>
             
-            {% if weather.has_data %}
-            <div class="weather-desc-box"><span data-weather-desc>{{ weather.weather_desc }}</span></div>
-            
-            <div class="temp-display">
-                <div class="temp-main"><span data-temp>{{ weather.temp }}</span>°C</div>
-                <div class="temp-range">↑ <span data-temp-max>{{ weather.temp_max }}</span>°C / ↓ <span data-temp-min>{{ weather.temp_min }}</span>°C</div>
-            </div>
+            {% if forecast.has_data %}
+            <div class="weather-desc-box"><span data-forecast-weather>{{ forecast.weather_desc }}</span></div>
             
             <div class="weather-grid">
-                <div class="weather-item">
-                    <span class="weather-label">體感溫度</span>
-                    <span class="weather-value"><span data-feels-like>{{ weather.feels_like }}</span>°C</span>
+                <div class="weather-item temp">
+                    <span class="weather-label">🌡️ 溫度</span>
+                    <span class="weather-value-large"><span data-forecast-temp>{{ forecast.temp }}</span>°C</span>
+                </div>
+                
+                <div class="weather-item feels">
+                    <span class="weather-label">🌡️ 體感溫度</span>
+                    <span class="weather-value"><span data-forecast-feels>{{ forecast.feels_like }}</span>°C</span>
+                </div>
+                
+                <div class="weather-item comfort {{ forecast.comfort_color }}">
+                    <div>
+                        <div class="weather-label">😊 舒適度</div>
+                        <div style="font-size: 0.8em; margin-top: 5px;"><span data-forecast-comfort-desc>{{ forecast.comfort_desc }}</span> (指數 <span data-forecast-comfort>{{ forecast.comfort_index }}</span>)</div>
+                    </div>
+                    <span class="comfort-emoji" data-forecast-comfort-emoji>{{ forecast.comfort_emoji }}</span>
                 </div>
                 
                 <div class="weather-item humidity">
-                    <span class="weather-label">相對濕度</span>
-                    <span class="weather-value"><span data-humidity>{{ weather.humidity }}</span>%</span>
+                    <span class="weather-label">💧 相對濕度</span>
+                    <span class="weather-value"><span data-forecast-humidity>{{ forecast.humidity }}</span>%</span>
                 </div>
                 
-                <div class="weather-item rain">
-                    <span class="weather-label">降雨量</span>
-                    <span class="weather-value"><span data-rain>{{ weather.rain }}</span> mm</span>
+                <div class="weather-item pop">
+                    <span class="weather-label">☔ 降雨機率</span>
+                    <span class="weather-value"><span data-forecast-pop>{{ forecast.pop }}</span>%</span>
                 </div>
                 
                 <div class="weather-item wind">
-                    <span class="weather-label">風速 (<span data-wind-dir>{{ weather.wind_dir }}</span>)</span>
-                    <span class="weather-value"><span data-wind-speed>{{ weather.wind_speed }}</span> m/s</span>
-                </div>
-                
-                <div class="weather-item uvi {{ weather.uvi_color }}">
-                    <div>
-                        <div class="weather-label">紫外線 (新竹)</div>
-                        <div class="uvi-level">{{ weather.uvi_level }}</div>
+                    <div style="width: 100%;">
+                        <div class="weather-label" style="margin-bottom: 8px;">🌬️ 風速與風向</div>
+                        <div style="font-size: 1em; font-weight: bold;" data-forecast-wind>{{ forecast.wind_display }}</div>
                     </div>
-                    <span class="weather-value"><span data-uvi>{{ weather.uvi }}</span></span>
                 </div>
             </div>
+            
+            <div class="forecast-time">
+                📅 預報時間：<span data-forecast-time>{{ forecast.forecast_time }}</span>
+            </div>
             {% else %}
-            <div class="error-message"><h3>⚠️ 天氣資料載入中</h3></div>
+            <div class="error-message"><h3>⚠️ 預報資料載入中</h3></div>
             {% endif %}
         </div>
         
         <div class="container">
             <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50">
-  <!-- 主要雲朵 -->
   <defs>
     <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" style="stop-color:#E8F4F8;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#B8D4E0;stop-opacity:1" />
     </linearGradient>
-    
     <linearGradient id="particleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#FFD93D;stop-opacity:0.8" />
       <stop offset="100%" style="stop-color:#FFA83D;stop-opacity:0.8" />
     </linearGradient>
-    
-    <!-- 陰影濾鏡 -->
     <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
       <feOffset dx="0" dy="2" result="offsetblur"/>
@@ -740,70 +673,50 @@ HTML_TEMPLATE = """
       </feMerge>
     </filter>
   </defs>
-  
-  <!-- 雲朵形狀 -->
   <g filter="url(#shadow)">
-    <!-- 雲朵主體 -->
     <ellipse cx="35" cy="45" rx="18" ry="15" fill="url(#cloudGradient)"/>
     <ellipse cx="50" cy="40" rx="20" ry="18" fill="url(#cloudGradient)"/>
     <ellipse cx="65" cy="45" rx="18" ry="15" fill="url(#cloudGradient)"/>
     <rect x="25" y="45" width="50" height="15" fill="url(#cloudGradient)"/>
-    
-    <!-- 雲朵底部圓角 -->
     <ellipse cx="30" cy="60" rx="10" ry="8" fill="url(#cloudGradient)"/>
     <ellipse cx="50" cy="62" rx="15" ry="10" fill="url(#cloudGradient)"/>
     <ellipse cx="70" cy="60" rx="10" ry="8" fill="url(#cloudGradient)"/>
   </g>
-  
-  <!-- 空氣粒子 - 小圓點 -->
   <g opacity="0.9">
-    <!-- 大顆粒子 -->
     <circle cx="25" cy="70" r="3.5" fill="url(#particleGradient)">
       <animate attributeName="cy" values="70;75;70" dur="3s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="45" cy="75" r="4" fill="url(#particleGradient)">
       <animate attributeName="cy" values="75;80;75" dur="2.5s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.7;1;0.7" dur="2.5s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="65" cy="72" r="3" fill="url(#particleGradient)">
       <animate attributeName="cy" values="72;77;72" dur="2.8s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.5;0.9;0.5" dur="2.8s" repeatCount="indefinite"/>
     </circle>
-    
-    <!-- 小顆粒子 -->
     <circle cx="35" cy="78" r="2.5" fill="#FFB84D" opacity="0.7">
       <animate attributeName="cy" values="78;82;78" dur="3.2s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3.2s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="55" cy="80" r="2" fill="#FFB84D" opacity="0.6">
       <animate attributeName="cy" values="80;84;80" dur="2.7s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.7s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="75" cy="76" r="2.5" fill="#FFCC5C" opacity="0.6">
       <animate attributeName="cy" values="76;80;76" dur="3.5s" repeatCount="indefinite"/>
       <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3.5s" repeatCount="indefinite"/>
     </circle>
-    
-    <!-- 微小粒子 -->
     <circle cx="20" cy="65" r="1.5" fill="#FFD93D" opacity="0.5">
       <animate attributeName="cy" values="65;68;65" dur="2.2s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="70" cy="68" r="1.5" fill="#FFD93D" opacity="0.5">
       <animate attributeName="cy" values="68;71;68" dur="2.9s" repeatCount="indefinite"/>
     </circle>
-    
     <circle cx="50" cy="85" r="1.8" fill="#FFA83D" opacity="0.5">
       <animate attributeName="cy" values="85;88;85" dur="3.3s" repeatCount="indefinite"/>
     </circle>
   </g>
-  
-  <!-- 高光效果 -->
   <ellipse cx="45" cy="38" rx="12" ry="6" fill="white" opacity="0.4"/>
   <ellipse cx="60" cy="42" rx="8" ry="4" fill="white" opacity="0.3"/>
 </svg> 空氣品質監測</h1>
@@ -910,7 +823,7 @@ def index():
         with fetch_lock:
             if should_fetch_data():
                 fetch_air_quality_data()
-                fetch_weather_data()
+                fetch_weather_forecast()
     
     bg_exists = os.path.exists(BACKGROUND_IMAGE)
     page_load_time = get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
@@ -918,24 +831,23 @@ def index():
     return render_template_string(
         HTML_TEMPLATE, 
         data=latest_data,
-        weather=weather_data,
+        forecast=forecast_data,
         page_load_time=page_load_time,
         bg_image=BACKGROUND_IMAGE if bg_exists else None
     )
 
 @app.route('/api/data')
 def api_data():
-    """返回 JSON 格式的最新數據"""
     if should_fetch_data():
         with fetch_lock:
             if should_fetch_data():
                 fetch_air_quality_data()
-                fetch_weather_data()
+                fetch_weather_forecast()
     
     return {
         'success': True,
         'aqi_data': latest_data,
-        'weather_data': weather_data,
+        'forecast_data': forecast_data,
         'page_load_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     }
 
@@ -949,26 +861,8 @@ def background():
 
 load_baseline()
 fetch_air_quality_data()
-fetch_weather_data()
+fetch_weather_forecast()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
