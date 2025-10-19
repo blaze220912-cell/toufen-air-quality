@@ -19,8 +19,13 @@ latest_data = {
 }
 
 previous_data = {
-    'aqi': None, 'pm25_avg': None, 'pm10_avg': None,
-    'pm10': None, 'pm25': None, 'o3': None
+    'aqi': None,
+    'pm25_avg': None,
+    'pm10_avg': None,
+    'pm10': None,
+    'pm25': None,
+    'o3': None,
+    'base_hour': None  # 記錄基準值是哪個小時
 }
 
 weather_data = {
@@ -42,14 +47,26 @@ def get_taipei_time():
 def fetch_air_quality_data():
     global latest_data, previous_data
     try:
+        print(f"正在呼叫 AQI API...")
         response = requests.get(AQI_API_URL, timeout=10, verify=False)
+        print(f"AQI API 回應狀態碼: {response.status_code}")
+        
+        response.raise_for_status()
         data = response.json()
         
-        if data.get('records'):
+        if data.get('records') and len(data['records']) > 0:
             records = data['records']
-            valid_records = [r for r in records if r.get('publishtime')]
-            record = valid_records[0] if valid_records else records[0]
+            print(f"API 返回 {len(records)} 筆資料")
             
+            valid_records = [r for r in records if r.get('publishtime')]
+            if valid_records:
+                valid_records.sort(key=lambda x: x.get('publishtime', ''), reverse=True)
+                record = valid_records[0]
+                print(f"✓ 選擇最新資料，發布時間: {record.get('publishtime', 'N/A')}")
+            else:
+                record = records[0]
+            
+            # 取得數值
             aqi = record.get('aqi', 'N/A')
             pm25 = record.get('pm2.5', 'N/A')
             pm25_avg = record.get('pm2.5_avg', 'N/A')
@@ -57,26 +74,47 @@ def fetch_air_quality_data():
             pm10_avg = record.get('pm10_avg', 'N/A')
             o3 = record.get('o3', 'N/A')
             
+            # 取得當前小時（整點）
+            current_time = get_taipei_time()
+            current_hour = current_time.replace(minute=0, second=0, microsecond=0)
+            
+            # 判斷是否需要更新基準值（跨越整點小時）
+            if previous_data['base_hour'] is None or previous_data['base_hour'] != current_hour:
+                # 跨越新的整點，更新基準值
+                print(f"跨越新整點，更新基準值: {current_hour.strftime('%H:00')}")
+                try:
+                    if aqi != 'N/A' and aqi != '':
+                        previous_data['aqi'] = float(aqi)
+                    if pm25_avg != 'N/A' and pm25_avg != '':
+                        previous_data['pm25_avg'] = float(pm25_avg)
+                    if pm10_avg != 'N/A' and pm10_avg != '':
+                        previous_data['pm10_avg'] = float(pm10_avg)
+                    if pm10 != 'N/A' and pm10 != '':
+                        previous_data['pm10'] = float(pm10)
+                    if pm25 != 'N/A' and pm25 != '':
+                        previous_data['pm25'] = float(pm25)
+                    if o3 != 'N/A' and o3 != '':
+                        previous_data['o3'] = float(o3)
+                    previous_data['base_hour'] = current_hour
+                except:
+                    pass
+            
+            # 計算變化值（與當前小時的基準值比較）
             def calculate_change(current, previous):
                 if current == 'N/A' or current == '' or previous is None:
                     return None
                 try:
-                    curr_val, prev_val = float(current), float(previous)
+                    curr_val = float(current)
+                    prev_val = float(previous)
                     change = curr_val - prev_val
-                    if change > 0: return f"↑ +{change:.1f}"
-                    elif change < 0: return f"↓ {change:.1f}"
-                    else: return "─ 0"
-                except: return None
-            
-            def get_level_info(value, thresholds, labels):
-                if value == 'N/A' or value == '': return 'gray', '無資料'
-                try:
-                    val = float(value)
-                    if val <= thresholds[0]: return 'green', labels[0]
-                    elif val <= thresholds[1]: return 'yellow', labels[1]
-                    elif val <= thresholds[2]: return 'orange', labels[2]
-                    else: return 'red', labels[3]
-                except: return 'gray', '無資料'
+                    if change > 0:
+                        return f"↑ +{change:.1f}"
+                    elif change < 0:
+                        return f"↓ {change:.1f}"
+                    else:
+                        return "─ 0"
+                except:
+                    return None
             
             aqi_change = calculate_change(aqi, previous_data['aqi'])
             pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
@@ -85,14 +123,22 @@ def fetch_air_quality_data():
             pm25_change = calculate_change(pm25, previous_data['pm25'])
             o3_change = calculate_change(o3, previous_data['o3'])
             
-            try:
-                previous_data['aqi'] = float(aqi) if aqi != 'N/A' else previous_data['aqi']
-                previous_data['pm25_avg'] = float(pm25_avg) if pm25_avg != 'N/A' else previous_data['pm25_avg']
-                previous_data['pm10_avg'] = float(pm10_avg) if pm10_avg != 'N/A' else previous_data['pm10_avg']
-                previous_data['pm10'] = float(pm10) if pm10 != 'N/A' else previous_data['pm10']
-                previous_data['pm25'] = float(pm25) if pm25 != 'N/A' else previous_data['pm25']
-                previous_data['o3'] = float(o3) if o3 != 'N/A' else previous_data['o3']
-            except: pass
+            # 計算顏色等級和文字標籤
+            def get_level_info(value, thresholds, labels):
+                if value == 'N/A' or value == '':
+                    return 'gray', '無資料'
+                try:
+                    val = float(value)
+                    if val <= thresholds[0]:
+                        return 'green', labels[0]
+                    elif val <= thresholds[1]:
+                        return 'yellow', labels[1]
+                    elif val <= thresholds[2]:
+                        return 'orange', labels[2]
+                    else:
+                        return 'red', labels[3]
+                except:
+                    return 'gray', '無資料'
             
             aqi_color, aqi_label = get_level_info(aqi, [50, 100, 150], ['良好', '普通', '對敏感族群不健康', '不健康'])
             pm25_avg_color, pm25_avg_label = get_level_info(pm25_avg, [15.4, 35.4, 54.4], ['良好', '普通', '對敏感族群不健康', '不健康'])
@@ -102,21 +148,42 @@ def fetch_air_quality_data():
             o3_color, o3_label = get_level_info(o3, [54, 70, 85], ['良好', '普通', '對敏感族群不健康', '不健康'])
             
             latest_data = {
-                'aqi': aqi, 'aqi_color': aqi_color, 'aqi_label': aqi_label, 'aqi_change': aqi_change,
-                'pm25_avg': pm25_avg, 'pm25_avg_color': pm25_avg_color, 'pm25_avg_label': pm25_avg_label, 'pm25_avg_change': pm25_avg_change,
-                'pm10_avg': pm10_avg, 'pm10_avg_color': pm10_avg_color, 'pm10_avg_label': pm10_avg_label, 'pm10_avg_change': pm10_avg_change,
-                'pm10': pm10, 'pm10_color': pm10_color, 'pm10_label': pm10_label, 'pm10_change': pm10_change,
-                'pm25': pm25, 'pm25_color': pm25_color, 'pm25_label': pm25_label, 'pm25_change': pm25_change,
-                'o3': o3, 'o3_color': o3_color, 'o3_label': o3_label, 'o3_change': o3_change,
+                'aqi': aqi,
+                'aqi_color': aqi_color,
+                'aqi_label': aqi_label,
+                'aqi_change': aqi_change,
+                'pm25_avg': pm25_avg,
+                'pm25_avg_color': pm25_avg_color,
+                'pm25_avg_label': pm25_avg_label,
+                'pm25_avg_change': pm25_avg_change,
+                'pm10_avg': pm10_avg,
+                'pm10_avg_color': pm10_avg_color,
+                'pm10_avg_label': pm10_avg_label,
+                'pm10_avg_change': pm10_avg_change,
+                'pm10': pm10,
+                'pm10_color': pm10_color,
+                'pm10_label': pm10_label,
+                'pm10_change': pm10_change,
+                'pm25': pm25,
+                'pm25_color': pm25_color,
+                'pm25_label': pm25_label,
+                'pm25_change': pm25_change,
+                'o3': o3,
+                'o3_color': o3_color,
+                'o3_label': o3_label,
+                'o3_change': o3_change,
                 'update_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S'),
                 'site_name': record.get('sitename', '頭份'),
                 'publish_time': record.get('publishtime', 'N/A'),
-                'has_data': True, 'last_fetch': get_taipei_time()
+                'has_data': True,
+                'last_fetch': get_taipei_time()
             }
+            print(f"AQI 數據更新成功")
         else:
+            print("API 回應中沒有找到數據記錄")
             latest_data['has_data'] = False
     except Exception as e:
-        print(f"AQI錯誤: {e}")
+        print(f"抓取 AQI 數據失敗: {e}")
         latest_data['has_data'] = False
 
 def fetch_weather_data():
@@ -613,6 +680,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
