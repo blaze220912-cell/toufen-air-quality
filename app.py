@@ -122,51 +122,76 @@ def fetch_air_quality_data():
 def fetch_weather_data():
     global weather_data
     try:
+        print(f"正在呼叫頭份觀測站 API...")
+        
+        # 抓取頭份觀測站即時資料
         response = requests.get(WEATHER_API_URL, timeout=10)
+        print(f"觀測站 API 狀態碼: {response.status_code}")
+        response.raise_for_status()
         data = response.json()
+        
+        # 抓取新竹 UVI
         uvi_response = requests.get(UVI_API_URL, timeout=10)
         uvi_data = uvi_response.json()
         
-        if data.get('records') and data['records'].get('locations'):
-            location = data['records']['locations'][0]['location'][0]
-            weather_elements = location['weatherElement']
-            
-            def get_element_value(element_name, value_index=0):
-                for element in weather_elements:
-                    if element['elementName'] == element_name:
-                        if element['time']:
-                            time_data = element['time'][0]
-                            if 'elementValue' in time_data:
-                                return time_data['elementValue'][value_index]['value']
-                            elif 'parameter' in time_data:
-                                return time_data['parameter']['parameterName']
-                return 'N/A'
-            
-            uvi = 'N/A'
-            if uvi_data.get('records') and uvi_data['records'].get('Station'):
-                for station in uvi_data['records']['Station']:
-                    if station.get('StationName') == '新竹':
-                        uvi = station.get('UVI', {}).get('UVIValue', 'N/A')
-                        break
-            
-            weather_data = {
-                'temp': get_element_value('T'),
-                'temp_max': get_element_value('MaxT'),
-                'temp_min': get_element_value('MinT'),
-                'feels_like': get_element_value('MaxAT'),
-                'humidity': get_element_value('RH'),
-                'pop': get_element_value('PoP12h'),
-                'weather_desc': get_element_value('Wx'),
-                'wind_speed': get_element_value('WS'),
-                'wind_dir': get_element_value('WD'),
-                'uvi': uvi,
-                'has_data': True,
-                'last_fetch': get_taipei_time()
-            }
-        else:
-            weather_data['has_data'] = False
+        if data.get('success') == 'true' and data.get('records'):
+            locations = data['records'].get('Station', [])
+            if locations and len(locations) > 0:
+                station = locations[0]
+                obs_time = station.get('ObsTime', {}).get('DateTime', 'N/A')
+                
+                # 取得各項氣象觀測資料
+                def get_weather_element(element_name):
+                    elements = station.get('WeatherElement', {})
+                    element = elements.get(element_name, {})
+                    return element.get('value', 'N/A') if element else 'N/A'
+                
+                temp = get_weather_element('AirTemperature')  # 溫度
+                humidity = get_weather_element('RelativeHumidity')  # 相對濕度
+                wind_speed = get_weather_element('WindSpeed')  # 風速
+                wind_dir = get_weather_element('WindDirection')  # 風向
+                weather_desc = get_weather_element('Weather')  # 天氣描述
+                
+                # 取得 UVI（新竹測站）
+                uvi = 'N/A'
+                if uvi_data.get('success') == 'true' and uvi_data.get('records'):
+                    stations = uvi_data['records'].get('Station', [])
+                    for uvi_station in stations:
+                        if uvi_station.get('StationName') == '新竹':
+                            uvi_info = uvi_station.get('UVI', {})
+                            uvi_value = uvi_info.get('UVIValue')
+                            if uvi_value and uvi_value != '-99':
+                                uvi = uvi_value
+                            break
+                
+                weather_data = {
+                    'temp': temp,
+                    'temp_max': 'N/A',  # 觀測站沒有最高最低溫預測
+                    'temp_min': 'N/A',
+                    'feels_like': temp,  # 用當前溫度代替
+                    'humidity': humidity,
+                    'pop': 'N/A',  # 觀測站沒有降雨機率
+                    'weather_desc': weather_desc if weather_desc != 'N/A' else '觀測中',
+                    'wind_speed': wind_speed,
+                    'wind_dir': wind_dir,
+                    'uvi': uvi,
+                    'has_data': True,
+                    'last_fetch': get_taipei_time()
+                }
+                print(f"頭份觀測站數據更新成功")
+                print(f"觀測時間: {obs_time}, 溫度: {temp}°C, 濕度: {humidity}%")
+                return
+        
+        print("觀測站 API 回應格式不符")
+        weather_data['has_data'] = False
+        
+    except requests.exceptions.RequestException as e:
+        print(f"觀測站 API 請求錯誤: {e}")
+        weather_data['has_data'] = False
     except Exception as e:
-        print(f"天氣錯誤: {e}")
+        print(f"觀測站數據解析錯誤: {e}")
+        import traceback
+        traceback.print_exc()
         weather_data['has_data'] = False
 
 def should_fetch_data():
@@ -506,4 +531,5 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
