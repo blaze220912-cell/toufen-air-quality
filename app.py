@@ -188,16 +188,43 @@ def fetch_weather_data():
                 
                 wind_dir_text = degree_to_direction(wind_dir)
                 
-                # 取得 UVI（新竹測站）
+                # 取得 UVI（新竹測站 - O-A0003-001）
                 uvi = 'N/A'
+                uvi_level = '無資料'
+                uvi_color = 'gray'
+                
                 if uvi_data.get('success') == 'true' and uvi_data.get('records'):
                     uvi_stations = uvi_data['records'].get('Station', [])
                     for uvi_station in uvi_stations:
-                        if uvi_station.get('StationName') == '新竹':
-                            uvi_element = uvi_station.get('WeatherElement', {})
-                            uvi_info = uvi_element.get('UVIndex', 'N/A')
-                            if uvi_info and uvi_info != '-99':
-                                uvi = uvi_info
+                        station_name = uvi_station.get('StationName', '')
+                        station_id = uvi_station.get('StationId', '')
+                        if '新竹' in station_name or station_id == '467571':
+                            weather_element = uvi_station.get('WeatherElement', {})
+                            uvi_value = weather_element.get('UVIndex', 'N/A')
+                            
+                            if uvi_value and uvi_value != '-99' and uvi_value != 'N/A':
+                                try:
+                                    uvi_num = float(uvi_value)
+                                    uvi = str(uvi_num)
+                                    
+                                    # UVI 分級
+                                    if uvi_num <= 2:
+                                        uvi_level = '低量級'
+                                        uvi_color = 'green'
+                                    elif uvi_num <= 5:
+                                        uvi_level = '中量級'
+                                        uvi_color = 'yellow'
+                                    elif uvi_num <= 7:
+                                        uvi_level = '高量級'
+                                        uvi_color = 'orange'
+                                    elif uvi_num <= 10:
+                                        uvi_level = '過量級'
+                                        uvi_color = 'red'
+                                    else:
+                                        uvi_level = '危險級'
+                                        uvi_color = 'purple'
+                                except:
+                                    pass
                             break
                 
                 weather_data = {
@@ -211,6 +238,30 @@ def fetch_weather_data():
                     'wind_speed': wind_speed,
                     'wind_dir': wind_dir_text,
                     'uvi': uvi,
+                    'uvi_level': uvi_level,
+                    'uvi_color': uvi_color,
+                    'has_data': True,
+                    'last_fetch': get_taipei_time()
+                }
+                print(f"✓ 頭份觀測站數據更新成功")
+                print(f"  溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
+                return
+            else:
+                print("× 沒有找到觀測站資料")
+        else:
+            print(f"× API 回應檢查失敗")
+            print(f"  success={data.get('success')}, records存在={bool(data.get('records'))}")
+        
+        weather_data['has_data'] = False
+        
+    except requests.exceptions.RequestException as e:
+        print(f"× 觀測站 API 請求錯誤: {e}")
+        weather_data['has_data'] = False
+    except Exception as e:
+        print(f"× 觀測站數據解析錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        weather_data['has_data'] = False
                     'has_data': True,
                     'last_fetch': get_taipei_time()
                 }
@@ -570,6 +621,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
