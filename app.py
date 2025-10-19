@@ -274,6 +274,7 @@ def fetch_air_quality_data():
             elif data_hour > previous_data['base_hour']:
                 print(f"跨越新整點: {previous_data['base_hour'].strftime('%H:00')} → {data_hour.strftime('%H:00')}")
                 
+                # 先計算變化量(用舊基準值)
                 aqi_change = calculate_change(aqi, previous_data['aqi'])
                 pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
                 pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
@@ -281,6 +282,9 @@ def fetch_air_quality_data():
                 pm25_change = calculate_change(pm25, previous_data['pm25'])
                 o3_change = calculate_change(o3, previous_data['o3'])
                 
+                print(f"計算變化量 - AQI: {previous_data['aqi']} → {aqi}, 變化: {aqi_change}")
+                
+                # 再更新基準值為新數據
                 try:
                     if aqi != 'N/A' and aqi != '':
                         previous_data['aqi'] = float(aqi)
@@ -295,17 +299,20 @@ def fetch_air_quality_data():
                     if o3 != 'N/A' and o3 != '':
                         previous_data['o3'] = float(o3)
                     previous_data['base_hour'] = data_hour
-                except:
-                    pass
+                    print(f"已更新基準值: AQI={previous_data['aqi']}, 時間={data_hour.strftime('%H:00')}")
+                except Exception as e:
+                    print(f"更新基準值錯誤: {e}")
                 save_baseline()
                 
             else:
+                # 同一整點小時內,計算變化量(會是0或接近0)
                 aqi_change = calculate_change(aqi, previous_data['aqi'])
                 pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
                 pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
                 pm10_change = calculate_change(pm10, previous_data['pm10'])
                 pm25_change = calculate_change(pm25, previous_data['pm25'])
                 o3_change = calculate_change(o3, previous_data['o3'])
+                print(f"同一整點內 {data_hour.strftime('%H:00')}, AQI變化: {aqi_change}")
             
             def get_level_info(value, thresholds, labels):
                 if value == 'N/A' or value == '':
@@ -345,6 +352,8 @@ def fetch_air_quality_data():
             }
             
             print(f"AQI 數據更新成功")
+            print(f"數據時間: {data_hour.strftime('%H:00')}, 基準時間: {previous_data['base_hour'].strftime('%H:00')}")
+            print(f"當前AQI: {aqi}, 基準AQI: {previous_data['aqi']}, 變化: {aqi_change}")
             
         else:
             latest_data['has_data'] = False
