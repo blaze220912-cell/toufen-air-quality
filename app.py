@@ -128,8 +128,16 @@ def fetch_weather_forecast():
                 
                 if temp_element and len(temp_element['Time']) > 0:
                     first_time = temp_element['Time'][0]
-                    forecast_time = first_time.get('DataTime', 'N/A')
+                    forecast_time_raw = first_time.get('DataTime', 'N/A')
                     temp = first_time['ElementValue'][0].get('Temperature', 'N/A')
+                    
+                    # 格式化時間
+                    try:
+                        dt = datetime.strptime(forecast_time_raw, '%Y-%m-%dT%H:%M:%S%z')
+                        forecast_time = dt.strftime('%Y-%m-%d %H:%M')
+                    except:
+                        forecast_time = forecast_time_raw
+                    
                     print(f"  預報時間: {forecast_time}, 取得第一筆資料")
                 
                 if feels_element and len(feels_element['Time']) > 0:
