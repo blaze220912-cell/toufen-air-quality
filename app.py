@@ -135,28 +135,47 @@ def fetch_weather_data():
         uvi_data = uvi_response.json()
         
         if data.get('success') == 'true' and data.get('records'):
-            locations = data['records'].get('Station', [])
-            if locations and len(locations) > 0:
-                station = locations[0]
+            stations = data['records'].get('Station', [])
+            if stations and len(stations) > 0:
+                station = stations[0]
                 obs_time = station.get('ObsTime', {}).get('DateTime', 'N/A')
+                weather_element = station.get('WeatherElement', {})
                 
-                # 取得各項氣象觀測資料
-                def get_weather_element(element_name):
-                    elements = station.get('WeatherElement', {})
-                    element = elements.get(element_name, {})
-                    return element.get('value', 'N/A') if element else 'N/A'
+                # 取得各項氣象觀測資料（修正欄位路徑）
+                temp = weather_element.get('AirTemperature', 'N/A')
+                humidity = weather_element.get('RelativeHumidity', 'N/A')
+                wind_speed = weather_element.get('WindSpeed', 'N/A')
+                wind_dir = weather_element.get('WindDirection', 'N/A')
+                weather_desc = weather_element.get('Weather', '觀測中')
                 
-                temp = get_weather_element('AirTemperature')  # 溫度
-                humidity = get_weather_element('RelativeHumidity')  # 相對濕度
-                wind_speed = get_weather_element('WindSpeed')  # 風速
-                wind_dir = get_weather_element('WindDirection')  # 風向
-                weather_desc = get_weather_element('Weather')  # 天氣描述
+                # 取得當日最高/最低溫
+                daily_extreme = weather_element.get('DailyExtreme', {})
+                daily_high = daily_extreme.get('DailyHigh', {}).get('TemperatureInfo', {}).get('AirTemperature', 'N/A')
+                daily_low = daily_extreme.get('DailyLow', {}).get('TemperatureInfo', {}).get('AirTemperature', 'N/A')
+                
+                # 取得降雨量
+                precipitation = weather_element.get('Now', {}).get('Precipitation', 'N/A')
+                
+                # 風向轉換（度數轉方位）
+                def degree_to_direction(degree):
+                    if degree == 'N/A' or degree == '-99':
+                        return 'N/A'
+                    try:
+                        deg = float(degree)
+                        directions = ['北', '北北東', '東北', '東北東', '東', '東南東', '東南', '南南東',
+                                    '南', '南南西', '西南', '西南西', '西', '西北西', '西北', '北北西']
+                        index = round(deg / 22.5) % 16
+                        return directions[index]
+                    except:
+                        return 'N/A'
+                
+                wind_dir_text = degree_to_direction(wind_dir)
                 
                 # 取得 UVI（新竹測站）
                 uvi = 'N/A'
                 if uvi_data.get('success') == 'true' and uvi_data.get('records'):
-                    stations = uvi_data['records'].get('Station', [])
-                    for uvi_station in stations:
+                    uvi_stations = uvi_data['records'].get('Station', [])
+                    for uvi_station in uvi_stations:
                         if uvi_station.get('StationName') == '新竹':
                             uvi_info = uvi_station.get('UVI', {})
                             uvi_value = uvi_info.get('UVIValue')
@@ -166,20 +185,20 @@ def fetch_weather_data():
                 
                 weather_data = {
                     'temp': temp,
-                    'temp_max': 'N/A',  # 觀測站沒有最高最低溫預測
-                    'temp_min': 'N/A',
-                    'feels_like': temp,  # 用當前溫度代替
+                    'temp_max': daily_high,
+                    'temp_min': daily_low,
+                    'feels_like': temp,
                     'humidity': humidity,
-                    'pop': 'N/A',  # 觀測站沒有降雨機率
-                    'weather_desc': weather_desc if weather_desc != 'N/A' else '觀測中',
+                    'pop': precipitation,  # 用降雨量代替降雨機率
+                    'weather_desc': weather_desc,
                     'wind_speed': wind_speed,
-                    'wind_dir': wind_dir,
+                    'wind_dir': wind_dir_text,
                     'uvi': uvi,
                     'has_data': True,
                     'last_fetch': get_taipei_time()
                 }
                 print(f"頭份觀測站數據更新成功")
-                print(f"觀測時間: {obs_time}, 溫度: {temp}°C, 濕度: {humidity}%")
+                print(f"觀測時間: {obs_time}, 溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
                 return
         
         print("觀測站 API 回應格式不符")
@@ -193,7 +212,6 @@ def fetch_weather_data():
         import traceback
         traceback.print_exc()
         weather_data['has_data'] = False
-
 def should_fetch_data():
     if latest_data['last_fetch'] is None or weather_data['last_fetch'] is None:
         return True
@@ -531,5 +549,6 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
