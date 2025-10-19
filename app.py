@@ -130,6 +130,7 @@ def fetch_weather_forecast():
                     first_time = temp_element['Time'][0]
                     forecast_time = first_time.get('DataTime', 'N/A')
                     temp = first_time['ElementValue'][0].get('Temperature', 'N/A')
+                    print(f"  預報時間: {forecast_time}, 取得第一筆資料")
                 
                 if feels_element and len(feels_element['Time']) > 0:
                     feels_like = feels_element['Time'][0]['ElementValue'][0].get('ApparentTemperature', 'N/A')
@@ -182,7 +183,8 @@ def fetch_weather_forecast():
                 }
                 
                 print(f"✓ 預報數據更新成功")
-                print(f"  溫度: {temp}°C, 舒適度: {comfort_desc}")
+                print(f"  預報時間: {forecast_time}")
+                print(f"  溫度: {temp}°C, 舒適度: {comfort_desc}, 降雨機率: {pop}%")
                 return
         
         forecast_data['has_data'] = False
@@ -369,9 +371,21 @@ def fetch_air_quality_data():
         latest_data['has_data'] = False
 
 def should_fetch_data():
+    """檢查是否需要更新數據 - 兩個數據源都要考慮"""
+    current_time = get_taipei_time()
+    
+    # 如果任一數據未初始化,需要更新
     if latest_data['last_fetch'] is None or forecast_data['last_fetch'] is None:
         return True
-    return get_taipei_time() - latest_data['last_fetch'] > timedelta(minutes=5)
+    
+    # 檢查空品數據是否超過5分鐘
+    aqi_expired = current_time - latest_data['last_fetch'] > timedelta(minutes=5)
+    
+    # 檢查預報數據是否超過5分鐘
+    forecast_expired = current_time - forecast_data['last_fetch'] > timedelta(minutes=5)
+    
+    # 任一個過期就需要更新
+    return aqi_expired or forecast_expired
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
