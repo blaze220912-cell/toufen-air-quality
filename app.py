@@ -347,7 +347,18 @@ HTML_TEMPLATE = """
         .weather-item.humidity { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .weather-item.rain { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); }
         .weather-item.wind { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .weather-item.uvi { background: linear-gradient(135deg, #ffd89b 0%, #ff6b6b 100%); }
+        .weather-item.uvi.green { background: linear-gradient(135deg, #00d084 0%, #00a86b 100%); }
+        .weather-item.uvi.yellow { background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%); }
+        .weather-item.uvi.orange { background: linear-gradient(135deg, #ff8c00 0%, #ff6b00 100%); }
+        .weather-item.uvi.red { background: linear-gradient(135deg, #ff4757 0%, #e84118 100%); }
+        .weather-item.uvi.purple { background: linear-gradient(135deg, #a55eea 0%, #8854d0 100%); }
+        .weather-item.uvi.gray { background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); }
+
+.uvi-level {
+    font-size: 0.8em;
+    margin-top: 5px;
+    opacity: 0.9;
+}
         .weather-label { font-size: 0.9em; opacity: 0.9; }
         .weather-value { font-size: 1.5em; font-weight: bold; }
         .temp-display {
@@ -621,6 +632,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
