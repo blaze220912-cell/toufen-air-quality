@@ -130,18 +130,32 @@ def fetch_weather_data():
         response.raise_for_status()
         data = response.json()
         
-        # 抓取新竹 UVI
-        uvi_response = requests.get(UVI_API_URL, timeout=10)
-        uvi_data = uvi_response.json()
+        # 檢查回應
+        print(f"API success 值: {data.get('success')}")
+        print(f"有 records: {bool(data.get('records'))}")
         
-        if data.get('success') == 'true' and data.get('records'):
-            stations = data['records'].get('Station', [])
-            if stations and len(stations) > 0:
+        # 抓取新竹 UVI
+        try:
+            uvi_response = requests.get(UVI_API_URL, timeout=10)
+            uvi_data = uvi_response.json()
+        except:
+            uvi_data = {}
+        
+        # 修正：success 是字串，且要檢查 records
+        if data.get('success') == 'true' and 'records' in data:
+            records = data.get('records', {})
+            stations = records.get('Station', [])
+            
+            print(f"找到 {len(stations)} 個觀測站")
+            
+            if len(stations) > 0:
                 station = stations[0]
+                print(f"測站名稱: {station.get('StationName')}")
+                
                 obs_time = station.get('ObsTime', {}).get('DateTime', 'N/A')
                 weather_element = station.get('WeatherElement', {})
                 
-                # 取得各項氣象觀測資料（修正欄位路徑）
+                # 取得各項氣象觀測資料
                 temp = weather_element.get('AirTemperature', 'N/A')
                 humidity = weather_element.get('RelativeHumidity', 'N/A')
                 wind_speed = weather_element.get('WindSpeed', 'N/A')
@@ -150,15 +164,18 @@ def fetch_weather_data():
                 
                 # 取得當日最高/最低溫
                 daily_extreme = weather_element.get('DailyExtreme', {})
-                daily_high = daily_extreme.get('DailyHigh', {}).get('TemperatureInfo', {}).get('AirTemperature', 'N/A')
-                daily_low = daily_extreme.get('DailyLow', {}).get('TemperatureInfo', {}).get('AirTemperature', 'N/A')
+                daily_high_info = daily_extreme.get('DailyHigh', {}).get('TemperatureInfo', {})
+                daily_low_info = daily_extreme.get('DailyLow', {}).get('TemperatureInfo', {})
+                daily_high = daily_high_info.get('AirTemperature', 'N/A')
+                daily_low = daily_low_info.get('AirTemperature', 'N/A')
                 
                 # 取得降雨量
-                precipitation = weather_element.get('Now', {}).get('Precipitation', 'N/A')
+                now_info = weather_element.get('Now', {})
+                precipitation = now_info.get('Precipitation', 'N/A')
                 
                 # 風向轉換（度數轉方位）
                 def degree_to_direction(degree):
-                    if degree == 'N/A' or degree == '-99':
+                    if degree == 'N/A' or degree == '-99' or degree == -99:
                         return 'N/A'
                     try:
                         deg = float(degree)
@@ -177,10 +194,10 @@ def fetch_weather_data():
                     uvi_stations = uvi_data['records'].get('Station', [])
                     for uvi_station in uvi_stations:
                         if uvi_station.get('StationName') == '新竹':
-                            uvi_info = uvi_station.get('UVI', {})
-                            uvi_value = uvi_info.get('UVIValue')
-                            if uvi_value and uvi_value != '-99':
-                                uvi = uvi_value
+                            uvi_element = uvi_station.get('WeatherElement', {})
+                            uvi_info = uvi_element.get('UVIndex', 'N/A')
+                            if uvi_info and uvi_info != '-99':
+                                uvi = uvi_info
                             break
                 
                 weather_data = {
@@ -189,7 +206,7 @@ def fetch_weather_data():
                     'temp_min': daily_low,
                     'feels_like': temp,
                     'humidity': humidity,
-                    'pop': precipitation,  # 用降雨量代替降雨機率
+                    'pop': precipitation,
                     'weather_desc': weather_desc,
                     'wind_speed': wind_speed,
                     'wind_dir': wind_dir_text,
@@ -197,18 +214,22 @@ def fetch_weather_data():
                     'has_data': True,
                     'last_fetch': get_taipei_time()
                 }
-                print(f"頭份觀測站數據更新成功")
-                print(f"觀測時間: {obs_time}, 溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
+                print(f"✓ 頭份觀測站數據更新成功")
+                print(f"  溫度: {temp}°C, 濕度: {humidity}%, 天氣: {weather_desc}")
                 return
+            else:
+                print("× 沒有找到觀測站資料")
+        else:
+            print(f"× API 回應檢查失敗")
+            print(f"  success={data.get('success')}, records存在={bool(data.get('records'))}")
         
-        print("觀測站 API 回應格式不符")
         weather_data['has_data'] = False
         
     except requests.exceptions.RequestException as e:
-        print(f"觀測站 API 請求錯誤: {e}")
+        print(f"× 觀測站 API 請求錯誤: {e}")
         weather_data['has_data'] = False
     except Exception as e:
-        print(f"觀測站數據解析錯誤: {e}")
+        print(f"× 觀測站數據解析錯誤: {e}")
         import traceback
         traceback.print_exc()
         weather_data['has_data'] = False
@@ -400,8 +421,8 @@ HTML_TEMPLATE = """
                     <span class="weather-value">{{ weather.humidity }}%</span>
                 </div>
                 <div class="weather-item rain">
-                    <span class="weather-label">降雨機率</span>
-                    <span class="weather-value">{{ weather.pop }}%</span>
+                    <span class="weather-label">降雨量</span>
+                    <span class="weather-value">{{ weather.pop }} mm</span>
                 </div>
                 <div class="weather-item wind">
                     <span class="weather-label">風速 ({{ weather.wind_dir }})</span>
@@ -549,6 +570,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
