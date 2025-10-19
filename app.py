@@ -461,8 +461,8 @@ HTML_TEMPLATE = """
                     <span class="weather-value">{{ weather.humidity }}%</span>
                 </div>
                 <div class="weather-item rain">
-                    <span class="weather-label">降雨量</span>
-                    <span class="weather-value">{{ weather.pop }} mm</span>
+                     <span class="weather-label">降雨量</span>
+                     <span class="weather-value">{{ weather.rain }} mm</span>
                 </div>
                 <div class="weather-item wind">
                     <span class="weather-label">風速 ({{ weather.wind_dir }})</span>
@@ -613,6 +613,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
