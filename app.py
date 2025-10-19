@@ -403,12 +403,3 @@ if __name__ == '__main__':
 
 # Gunicorn 啟動時自動執行
 ensure_background_thread()
-```
-
-## **另外，建立 `requirements.txt` 檔案：**
-```
-Flask==3.0.0
-requests==2.31.0
-urllib3==2.1.0
-pytz==2024.1
-gunicorn==21.2.0
