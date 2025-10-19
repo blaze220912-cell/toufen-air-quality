@@ -230,18 +230,22 @@ def fetch_air_quality_data():
             
             def calculate_change(current, previous):
                 if current == 'N/A' or current == '' or previous is None:
+                    print(f"  calculate_change 跳過: current={current}, previous={previous}")
                     return None
                 try:
                     curr_val = float(current)
                     prev_val = float(previous)
                     change = curr_val - prev_val
                     if change > 0:
-                        return f"↑ +{change:.1f}"
+                        result = f"↑ +{change:.1f}"
                     elif change < 0:
-                        return f"↓ {change:.1f}"
+                        result = f"↓ {change:.1f}"
                     else:
-                        return "─ 0"
-                except:
+                        result = "─ 0"
+                    print(f"  calculate_change: {prev_val} → {curr_val} = {result}")
+                    return result
+                except Exception as e:
+                    print(f"  calculate_change 錯誤: {e}")
                     return None
             
             if previous_data['base_hour'] is None:
@@ -354,6 +358,7 @@ def fetch_air_quality_data():
             print(f"AQI 數據更新成功")
             print(f"數據時間: {data_hour.strftime('%H:00')}, 基準時間: {previous_data['base_hour'].strftime('%H:00')}")
             print(f"當前AQI: {aqi}, 基準AQI: {previous_data['aqi']}, 變化: {aqi_change}")
+            print(f"所有變化值: AQI={aqi_change}, PM2.5_avg={pm25_avg_change}, PM10_avg={pm10_avg_change}")
             
         else:
             latest_data['has_data'] = False
@@ -493,7 +498,7 @@ HTML_TEMPLATE = """
             font-weight: normal;
             padding: 3px 8px;
             border-radius: 5px;
-            whitespace: nowrap;
+            white-space: nowrap;
         }
         .data-change.up { color: #c0392b; background: rgba(192, 57, 43, 0.2); }
         .data-change.down { color: #27ae60; background: rgba(39, 174, 96, 0.2); }
@@ -739,6 +744,8 @@ HTML_TEMPLATE = """
                         <span data-aqi>{{ data.aqi }}</span>
                         {% if data.aqi_change %}
                         <span data-aqi-change class="data-change {{ 'up' if '↑' in data.aqi_change else ('down' if '↓' in data.aqi_change else 'same') }}">{{ data.aqi_change }}</span>
+                        {% else %}
+                        <span data-aqi-change class="data-change" style="display:none;"></span>
                         {% endif %}
                     </div>
                     <div class="data-unit">指數</div>
