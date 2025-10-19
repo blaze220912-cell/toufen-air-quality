@@ -1,8 +1,7 @@
 from flask import Flask, render_template_string, send_from_directory
 import requests
-from datetime import datetime, timedelta
-from threading import Thread, Lock
-import time
+from datetime import datetime, timedelta, timezone
+from threading import Lock
 import urllib3
 import os
 
@@ -10,6 +9,9 @@ import os
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+
+# 設定台北時區 (UTC+8)
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
 # 設定背景圖片檔名
 BACKGROUND_IMAGE = "background.jpg"
@@ -33,6 +35,10 @@ latest_data = {
 fetch_lock = Lock()
 
 API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_488?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
+
+def get_taipei_time():
+    """取得台北時間"""
+    return datetime.now(TAIPEI_TZ)
 
 def fetch_air_quality_data():
     """抓取空汙數據"""
@@ -109,11 +115,11 @@ def fetch_air_quality_data():
                 'o3': o3,
                 'o3_color': o3_color,
                 'o3_label': o3_label,
-                'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'update_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S'),
                 'site_name': record.get('sitename', '頭份'),
                 'publish_time': record.get('datacreationdate', 'N/A'),
                 'has_data': True,
-                'last_fetch': datetime.now()
+                'last_fetch': get_taipei_time()
             }
             print(f"數據更新成功: {latest_data['update_time']}")
             print(f"環境部發布時間: {latest_data['publish_time']}")
@@ -128,7 +134,7 @@ def should_fetch_data():
     """判斷是否需要重新抓取資料（每5分鐘一次）"""
     if latest_data['last_fetch'] is None:
         return True
-    time_diff = datetime.now() - latest_data['last_fetch']
+    time_diff = get_taipei_time() - latest_data['last_fetch']
     return time_diff > timedelta(minutes=5)
 
 HTML_TEMPLATE = """
@@ -351,8 +357,8 @@ def index():
     # 檢查背景圖片是否存在
     bg_exists = os.path.exists(BACKGROUND_IMAGE)
     
-    # 加上當前頁面載入時間
-    page_load_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # 加上當前頁面載入時間（台北時區）
+    page_load_time = get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     
     return render_template_string(
         HTML_TEMPLATE, 
@@ -376,3 +382,17 @@ fetch_air_quality_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+```
+
+## **修改重點：**
+
+✅ **使用 `timezone(timedelta(hours=8))` 設定 UTC+8**  
+✅ **所有時間都透過 `get_taipei_time()` 取得台北時間**  
+✅ **不需要額外安裝 pytz 套件**
+
+`requirements.txt` 維持原樣就好：
+```
+Flask==3.0.0
+requests==2.31.0
+urllib3==2.1.0
+gunicorn==21.2.0
