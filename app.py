@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 import urllib3
 import os
+import json
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -27,6 +28,37 @@ previous_data = {
     'o3': None,
     'base_hour': None  # 記錄基準值是哪個小時
 }
+
+# 基準值檔案路徑
+BASELINE_FILE = 'baseline_data.json'
+
+# 載入基準值
+def load_baseline():
+    global previous_data
+    if os.path.exists(BASELINE_FILE):
+        try:
+            with open(BASELINE_FILE, 'r') as f:
+                saved_data = json.load(f)
+                # 轉換 base_hour 字串回 datetime
+                if saved_data.get('base_hour'):
+                    saved_data['base_hour'] = datetime.fromisoformat(saved_data['base_hour'])
+                previous_data.update(saved_data)
+                print(f"✓ 載入基準值: {previous_data['base_hour'].strftime('%Y-%m-%d %H:00') if previous_data['base_hour'] else 'None'}")
+        except Exception as e:
+            print(f"× 載入基準值失敗: {e}")
+
+# 儲存基準值
+def save_baseline():
+    try:
+        saved_data = previous_data.copy()
+        # 轉換 datetime 為字串
+        if saved_data.get('base_hour'):
+            saved_data['base_hour'] = saved_data['base_hour'].isoformat()
+        with open(BASELINE_FILE, 'w') as f:
+            json.dump(saved_data, f)
+        print(f"✓ 儲存基準值")
+    except Exception as e:
+        print(f"× 儲存基準值失敗: {e}")
 
 weather_data = {
     'temp': 'N/A', 'temp_max': 'N/A', 'temp_min': 'N/A',
@@ -117,6 +149,7 @@ def fetch_air_quality_data():
                     previous_data['base_hour'] = data_hour
                 except:
                     pass
+                save_baseline()
                 
                 # 第一次執行，變化量為 None
                 aqi_change = None
@@ -155,6 +188,7 @@ def fetch_air_quality_data():
                     previous_data['base_hour'] = data_hour
                 except:
                     pass
+                save_baseline()
                 
             else:
                 # 同一整點小時內，計算變化量（會是 0）
@@ -812,12 +846,14 @@ def background():
         return send_from_directory(directory, filename)
     return "", 404
 
+load_baseline()
 fetch_air_quality_data()
 fetch_weather_data()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
