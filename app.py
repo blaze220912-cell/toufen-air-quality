@@ -172,7 +172,9 @@ def fetch_weather_data():
 def should_fetch_data():
     if latest_data['last_fetch'] is None or weather_data['last_fetch'] is None:
         return True
-    return get_taipei_time() - latest_data['last_fetch'] > timedelta(minutes=5)HTML_TEMPLATE = """
+    return get_taipei_time() - latest_data['last_fetch'] > timedelta(minutes=5)
+
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -504,3 +506,4 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
