@@ -490,8 +490,11 @@ HTML_TEMPLATE = """
                     <span class="weather-label">風速 ({{ weather.wind_dir }})</span>
                     <span class="weather-value">{{ weather.wind_speed }} m/s</span>
                 </div>
-                <div class="weather-item uvi">
-                    <span class="weather-label">紫外線 (新竹)</span>
+                <div class="weather-item uvi {{ weather.uvi_color }}">
+                    <div>
+                        <div class="weather-label">紫外線 (新竹)</div>
+                        <div class="uvi-level">{{ weather.uvi_level }}</div>
+                    </div>
                     <span class="weather-value">{{ weather.uvi }}</span>
                 </div>
             </div>
@@ -632,6 +635,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
