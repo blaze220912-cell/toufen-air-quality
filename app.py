@@ -56,13 +56,11 @@ def fetch_air_quality_data():
         
         if data.get('records') and len(data['records']) > 0:
             records = data['records']
-            print(f"API 返回 {len(records)} 筆資料")
             
             valid_records = [r for r in records if r.get('publishtime')]
             if valid_records:
                 valid_records.sort(key=lambda x: x.get('publishtime', ''), reverse=True)
                 record = valid_records[0]
-                print(f"✓ 選擇最新資料，發布時間: {record.get('publishtime', 'N/A')}")
             else:
                 record = records[0]
             
@@ -74,32 +72,15 @@ def fetch_air_quality_data():
             pm10_avg = record.get('pm10_avg', 'N/A')
             o3 = record.get('o3', 'N/A')
             
-            # 取得當前小時（整點）
-            current_time = get_taipei_time()
-            current_hour = current_time.replace(minute=0, second=0, microsecond=0)
+            # 從發布時間取得數據的整點小時
+            publish_time_str = record.get('publishtime', '')
+            try:
+                publish_dt = datetime.strptime(publish_time_str, '%Y-%m-%d %H:%M')
+                data_hour = publish_dt.replace(minute=0, second=0, microsecond=0)
+            except:
+                data_hour = get_taipei_time().replace(minute=0, second=0, microsecond=0)
             
-            # 判斷是否需要更新基準值（跨越整點小時）
-            if previous_data['base_hour'] is None or previous_data['base_hour'] != current_hour:
-                # 跨越新的整點，更新基準值
-                print(f"跨越新整點，更新基準值: {current_hour.strftime('%H:00')}")
-                try:
-                    if aqi != 'N/A' and aqi != '':
-                        previous_data['aqi'] = float(aqi)
-                    if pm25_avg != 'N/A' and pm25_avg != '':
-                        previous_data['pm25_avg'] = float(pm25_avg)
-                    if pm10_avg != 'N/A' and pm10_avg != '':
-                        previous_data['pm10_avg'] = float(pm10_avg)
-                    if pm10 != 'N/A' and pm10 != '':
-                        previous_data['pm10'] = float(pm10)
-                    if pm25 != 'N/A' and pm25 != '':
-                        previous_data['pm25'] = float(pm25)
-                    if o3 != 'N/A' and o3 != '':
-                        previous_data['o3'] = float(o3)
-                    previous_data['base_hour'] = current_hour
-                except:
-                    pass
-            
-            # 計算變化值（與當前小時的基準值比較）
+            # 計算變化值函數
             def calculate_change(current, previous):
                 if current == 'N/A' or current == '' or previous is None:
                     return None
@@ -116,12 +97,73 @@ def fetch_air_quality_data():
                 except:
                     return None
             
-            aqi_change = calculate_change(aqi, previous_data['aqi'])
-            pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
-            pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
-            pm10_change = calculate_change(pm10, previous_data['pm10'])
-            pm25_change = calculate_change(pm25, previous_data['pm25'])
-            o3_change = calculate_change(o3, previous_data['o3'])
+            # 判斷是否需要更新基準值
+            if previous_data['base_hour'] is None:
+                # 第一次執行，設定基準值
+                print(f"首次執行，設定基準值為 {data_hour.strftime('%H:00')}")
+                try:
+                    if aqi != 'N/A' and aqi != '':
+                        previous_data['aqi'] = float(aqi)
+                    if pm25_avg != 'N/A' and pm25_avg != '':
+                        previous_data['pm25_avg'] = float(pm25_avg)
+                    if pm10_avg != 'N/A' and pm10_avg != '':
+                        previous_data['pm10_avg'] = float(pm10_avg)
+                    if pm10 != 'N/A' and pm10 != '':
+                        previous_data['pm10'] = float(pm10)
+                    if pm25 != 'N/A' and pm25 != '':
+                        previous_data['pm25'] = float(pm25)
+                    if o3 != 'N/A' and o3 != '':
+                        previous_data['o3'] = float(o3)
+                    previous_data['base_hour'] = data_hour
+                except:
+                    pass
+                
+                # 第一次執行，變化量為 None
+                aqi_change = None
+                pm25_avg_change = None
+                pm10_avg_change = None
+                pm10_change = None
+                pm25_change = None
+                o3_change = None
+                
+            elif data_hour > previous_data['base_hour']:
+                # 跨越新整點
+                print(f"跨越新整點: {previous_data['base_hour'].strftime('%H:00')} → {data_hour.strftime('%H:00')}")
+                
+                # 先計算變化量（用舊基準值）
+                aqi_change = calculate_change(aqi, previous_data['aqi'])
+                pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
+                pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
+                pm10_change = calculate_change(pm10, previous_data['pm10'])
+                pm25_change = calculate_change(pm25, previous_data['pm25'])
+                o3_change = calculate_change(o3, previous_data['o3'])
+                
+                # 再更新基準值為當前數據
+                try:
+                    if aqi != 'N/A' and aqi != '':
+                        previous_data['aqi'] = float(aqi)
+                    if pm25_avg != 'N/A' and pm25_avg != '':
+                        previous_data['pm25_avg'] = float(pm25_avg)
+                    if pm10_avg != 'N/A' and pm10_avg != '':
+                        previous_data['pm10_avg'] = float(pm10_avg)
+                    if pm10 != 'N/A' and pm10 != '':
+                        previous_data['pm10'] = float(pm10)
+                    if pm25 != 'N/A' and pm25 != '':
+                        previous_data['pm25'] = float(pm25)
+                    if o3 != 'N/A' and o3 != '':
+                        previous_data['o3'] = float(o3)
+                    previous_data['base_hour'] = data_hour
+                except:
+                    pass
+                
+            else:
+                # 同一整點小時內，計算變化量（會是 0）
+                aqi_change = calculate_change(aqi, previous_data['aqi'])
+                pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
+                pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
+                pm10_change = calculate_change(pm10, previous_data['pm10'])
+                pm25_change = calculate_change(pm25, previous_data['pm25'])
+                o3_change = calculate_change(o3, previous_data['o3'])
             
             # 計算顏色等級和文字標籤
             def get_level_info(value, thresholds, labels):
@@ -178,12 +220,16 @@ def fetch_air_quality_data():
                 'has_data': True,
                 'last_fetch': get_taipei_time()
             }
+            
             print(f"AQI 數據更新成功")
+            print(f"數據時間: {data_hour.strftime('%H:00')}, 基準時間: {previous_data['base_hour'].strftime('%H:00')}, AQI變化: {aqi_change}")
+            
         else:
-            print("API 回應中沒有找到數據記錄")
             latest_data['has_data'] = False
     except Exception as e:
         print(f"抓取 AQI 數據失敗: {e}")
+        import traceback
+        traceback.print_exc()
         latest_data['has_data'] = False
 
 def fetch_weather_data():
@@ -772,6 +818,7 @@ fetch_weather_data()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
