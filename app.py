@@ -287,6 +287,8 @@ def fetch_air_quality_data():
             # 計算所有變化量
             if previous_hour_data:
                 print(f"  → 計算變化量（當前 vs 前一小時）")
+                print(f"  🔍 DEBUG - 前一小時所有測項: {list(previous_hour_data.keys())}")  # ← 加這行
+                print(f"  🔍 DEBUG - 當前 O3 值: {o3}")  # ← 加這行
                 aqi_change = None  # 小時值 API 沒有 AQI
                 pm25_avg_change = calculate_change(pm25_avg, previous_hour_data, 'pm2.5_avg')
                 pm10_avg_change = calculate_change(pm10_avg, previous_hour_data, 'pm10_avg')
@@ -882,6 +884,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
