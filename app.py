@@ -188,7 +188,7 @@ def fetch_air_quality_data():
                 # 水平: {"2025-10-20 19:00": {"PM2.5": "10", "PM10": "25", ...}, ...}
                 grouped_data = {}
                 for record in hourly_records:
-                    if record.get('sitename') == '頭份':
+                    if record.get('sitename') == 'Toufen':
                         monitor_date = record.get('monitordate', '')
                         item_name = record.get('itemname', '')
                         concentration = record.get('concentration', 'N/A')
@@ -882,6 +882,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
