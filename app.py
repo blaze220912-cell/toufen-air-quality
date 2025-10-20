@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 import urllib3
 import os
+import json
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -11,13 +12,45 @@ app = Flask(__name__)
 TAIPEI_TZ = timezone(timedelta(hours=8))
 BACKGROUND_IMAGE = "background.jpg"
 
-# 空氣品質數據(右側)
+# 空氣品質數據(右側 - 保留原樣)
 latest_data = {
     'aqi': 'N/A', 'pm25_avg': 'N/A', 'pm10_avg': 'N/A',
     'pm10': 'N/A', 'pm25': 'N/A', 'o3': 'N/A',
     'update_time': '尚未更新', 'site_name': '頭份',
     'publish_time': 'N/A', 'has_data': False, 'last_fetch': None
 }
+
+previous_data = {
+    'aqi': None, 'pm25_avg': None, 'pm10_avg': None,
+    'pm10': None, 'pm25': None, 'o3': None,
+    'base_hour': None
+}
+
+BASELINE_FILE = 'baseline_data.json'
+
+def load_baseline():
+    global previous_data
+    if os.path.exists(BASELINE_FILE):
+        try:
+            with open(BASELINE_FILE, 'r') as f:
+                saved_data = json.load(f)
+                if saved_data.get('base_hour'):
+                    saved_data['base_hour'] = datetime.fromisoformat(saved_data['base_hour'])
+                previous_data.update(saved_data)
+                print(f"✓ 載入基準值: {previous_data['base_hour'].strftime('%Y-%m-%d %H:00') if previous_data['base_hour'] else 'None'}")
+        except Exception as e:
+            print(f"× 載入基準值失敗: {e}")
+
+def save_baseline():
+    try:
+        saved_data = previous_data.copy()
+        if saved_data.get('base_hour'):
+            saved_data['base_hour'] = saved_data['base_hour'].isoformat()
+        with open(BASELINE_FILE, 'w') as f:
+            json.dump(saved_data, f)
+        print(f"✓ 儲存基準值")
+    except Exception as e:
+        print(f"× 儲存基準值失敗: {e}")
 
 # 天氣預報數據(左側 - 修改為預報)
 forecast_data = {
@@ -32,7 +65,7 @@ forecast_data = {
 
 fetch_lock = Lock()
 
-AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&limit=2&sort=monitordate desc"
+AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&limit=100&sort=monitordate desc"
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 
 def get_taipei_time():
@@ -893,6 +926,7 @@ def background():
         return send_from_directory(directory, filename)
     return "", 404
 
+load_baseline()
 fetch_air_quality_data()
 fetch_weather_forecast()
 
