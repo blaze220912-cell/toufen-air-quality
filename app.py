@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 import urllib3
 import os
-import json
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -12,7 +11,7 @@ app = Flask(__name__)
 TAIPEI_TZ = timezone(timedelta(hours=8))
 BACKGROUND_IMAGE = "background.jpg"
 
-# 空氣品質數據(右側 - 保留原樣)
+# 空氣品質數據(右側)
 latest_data = {
     'aqi': 'N/A', 'pm25_avg': 'N/A', 'pm10_avg': 'N/A',
     'pm10': 'N/A', 'pm25': 'N/A', 'o3': 'N/A',
