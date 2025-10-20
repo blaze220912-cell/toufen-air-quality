@@ -180,8 +180,6 @@ def fetch_air_quality_data():
             if hourly_data.get('records') and len(hourly_data['records']) > 0:
                 hourly_records = hourly_data['records']
                 print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
-                print(f"  🔍 DEBUG - 第一筆數據: {hourly_records[0] if len(hourly_records) > 0 else 'N/A'}")
-                print(f"  🔍 DEBUG - 所有站名: {set([r.get('sitename', 'N/A') for r in hourly_records])}")
                 
                 # 將垂直格式轉換為水平格式
                 # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
@@ -257,7 +255,7 @@ def fetch_air_quality_data():
                     'pm10_avg': 'PM10',
                     'pm2.5': 'PM2.5',
                     'pm10': 'PM10',
-                    'o3': 'O3'
+                    'o3': 'Ozone'
                 }
                 
                 item_name = item_name_mapping.get(key)
@@ -287,8 +285,6 @@ def fetch_air_quality_data():
             # 計算所有變化量
             if previous_hour_data:
                 print(f"  → 計算變化量（當前 vs 前一小時）")
-                print(f"  🔍 DEBUG - 前一小時所有測項: {list(previous_hour_data.keys())}")  # ← 加這行
-                print(f"  🔍 DEBUG - 當前 O3 值: {o3}")  # ← 加這行
                 aqi_change = None  # 小時值 API 沒有 AQI
                 pm25_avg_change = calculate_change(pm25_avg, previous_hour_data, 'pm2.5_avg')
                 pm10_avg_change = calculate_change(pm10_avg, previous_hour_data, 'pm10_avg')
@@ -884,6 +880,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
