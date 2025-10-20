@@ -180,6 +180,8 @@ def fetch_air_quality_data():
             if hourly_data.get('records') and len(hourly_data['records']) > 0:
                 hourly_records = hourly_data['records']
                 print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
+                print(f"  🔍 DEBUG - 第一筆數據: {hourly_records[0] if len(hourly_records) > 0 else 'N/A'}")
+                print(f"  🔍 DEBUG - 所有站名: {set([r.get('sitename', 'N/A') for r in hourly_records])}")
                 
                 # 將垂直格式轉換為水平格式
                 # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
@@ -880,6 +882,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
