@@ -20,38 +20,6 @@ latest_data = {
     'publish_time': 'N/A', 'has_data': False, 'last_fetch': None
 }
 
-previous_data = {
-    'aqi': None, 'pm25_avg': None, 'pm10_avg': None,
-    'pm10': None, 'pm25': None, 'o3': None,
-    'base_hour': None
-}
-
-BASELINE_FILE = 'baseline_data.json'
-
-def load_baseline():
-    global previous_data
-    if os.path.exists(BASELINE_FILE):
-        try:
-            with open(BASELINE_FILE, 'r') as f:
-                saved_data = json.load(f)
-                if saved_data.get('base_hour'):
-                    saved_data['base_hour'] = datetime.fromisoformat(saved_data['base_hour'])
-                previous_data.update(saved_data)
-                print(f"✓ 載入基準值: {previous_data['base_hour'].strftime('%Y-%m-%d %H:00') if previous_data['base_hour'] else 'None'}")
-        except Exception as e:
-            print(f"× 載入基準值失敗: {e}")
-
-def save_baseline():
-    try:
-        saved_data = previous_data.copy()
-        if saved_data.get('base_hour'):
-            saved_data['base_hour'] = saved_data['base_hour'].isoformat()
-        with open(BASELINE_FILE, 'w') as f:
-            json.dump(saved_data, f)
-        print(f"✓ 儲存基準值")
-    except Exception as e:
-        print(f"× 儲存基準值失敗: {e}")
-
 # 天氣預報數據(左側 - 修改為預報)
 forecast_data = {
     'temp': 'N/A', 'feels_like': 'N/A',
@@ -66,6 +34,7 @@ forecast_data = {
 fetch_lock = Lock()
 
 AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
+AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?limit=2&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 
 def get_taipei_time():
@@ -194,13 +163,38 @@ def fetch_weather_forecast():
         traceback.print_exc()
         forecast_data['has_data'] = False
 
-# 抓取空氣品質(右側 - 保持原樣)
+# 抓取空氣品質(右側)
 def fetch_air_quality_data():
-    global latest_data, previous_data
+    global latest_data
     try:
         print(f"正在呼叫 AQI API...")
+        
+        # 1. 先呼叫小時值 API，取得前一小時數據
+        print(f"  → 呼叫小時值 API (取前一小時數據)...")
+        hourly_response = requests.get(AQI_HOURLY_API_URL, timeout=10, verify=False)
+        print(f"  → 小時值 API 狀態碼: {hourly_response.status_code}")
+        
+        previous_hour_data = None
+        if hourly_response.status_code == 200:
+            hourly_data = hourly_response.json()
+            if hourly_data.get('records') and len(hourly_data['records']) >= 2:
+                hourly_records = hourly_data['records']
+                # 排序：由新到舊
+                hourly_records.sort(key=lambda x: x.get('monitordate', ''), reverse=True)
+                # 取第2筆（前一小時）
+                previous_hour_data = hourly_records[1]
+                print(f"  ✓ 取得前一小時數據: {previous_hour_data.get('monitordate', 'N/A')}")
+            elif hourly_data.get('records') and len(hourly_data['records']) == 1:
+                print(f"  ⚠️ 小時值 API 只有1筆數據，無法取得前一小時")
+            else:
+                print(f"  ⚠️ 小時值 API 無數據")
+        else:
+            print(f"  ⚠️ 小時值 API 呼叫失敗")
+        
+        # 2. 呼叫即時觀測 API，取得當前數據
+        print(f"  → 呼叫即時觀測 API...")
         response = requests.get(AQI_API_URL, timeout=10, verify=False)
-        print(f"AQI API 回應狀態碼: {response.status_code}")
+        print(f"  → 即時 API 狀態碼: {response.status_code}")
         
         response.raise_for_status()
         data = response.json()
@@ -215,6 +209,7 @@ def fetch_air_quality_data():
             else:
                 record = records[0]
             
+            # 當前數據
             aqi = record.get('aqi', 'N/A')
             pm25 = record.get('pm2.5', 'N/A')
             pm25_avg = record.get('pm2.5_avg', 'N/A')
@@ -223,113 +218,52 @@ def fetch_air_quality_data():
             o3 = record.get('o3', 'N/A')
             
             publish_time_str = record.get('publishtime', '')
-            try:
-                publish_dt = datetime.strptime(publish_time_str, '%Y-%m-%d %H:%M')
-                data_hour = publish_dt.replace(minute=0, second=0, microsecond=0)
-            except:
-                data_hour = get_taipei_time().replace(minute=0, second=0, microsecond=0)
             
-            # 保存舊的變化量（用於同一小時內保持顯示）
-            old_aqi_change = latest_data.get('aqi_change', None)
-            old_pm25_avg_change = latest_data.get('pm25_avg_change', None)
-            old_pm10_avg_change = latest_data.get('pm10_avg_change', None)
-            old_pm10_change = latest_data.get('pm10_change', None)
-            old_pm25_change = latest_data.get('pm25_change', None)
-            old_o3_change = latest_data.get('o3_change', None)
-            
-            def calculate_change(current, previous):
-                """計算變化量，回傳格式化字串"""
-                if current == 'N/A' or current == '' or previous is None:
+            # 3. 計算變化量（當前 - 前一小時）
+            def calculate_change(current, previous_data, key):
+                """計算變化量：當前值 - 前一小時值"""
+                if current == 'N/A' or current == '' or previous_data is None:
                     return None
+                
+                previous_value = previous_data.get(key, 'N/A')
+                if previous_value == 'N/A' or previous_value == '':
+                    return None
+                
                 try:
                     curr_val = float(current)
-                    prev_val = float(previous)
+                    prev_val = float(previous_value)
                     change = curr_val - prev_val
                     if change > 0:
-                        return f"↑ +{change:.1f}"
+                        result = f"↑ +{change:.1f}"
                     elif change < 0:
-                        return f"↓ {change:.1f}"
+                        result = f"↓ {change:.1f}"
                     else:
-                        return "─ 0"
-                except:
+                        result = "─ 0"
+                    print(f"  計算 {key}: {prev_val} → {curr_val} = {result}")
+                    return result
+                except Exception as e:
+                    print(f"  計算 {key} 錯誤: {e}")
                     return None
             
-            # 判斷邏輯
-            if previous_data['base_hour'] is None:
-                # 首次執行：設定基準值
-                print(f"首次執行，設定基準值為 {data_hour.strftime('%Y-%m-%d %H:00')}")
-                try:
-                    if aqi != 'N/A' and aqi != '':
-                        previous_data['aqi'] = float(aqi)
-                    if pm25_avg != 'N/A' and pm25_avg != '':
-                        previous_data['pm25_avg'] = float(pm25_avg)
-                    if pm10_avg != 'N/A' and pm10_avg != '':
-                        previous_data['pm10_avg'] = float(pm10_avg)
-                    if pm10 != 'N/A' and pm10 != '':
-                        previous_data['pm10'] = float(pm10)
-                    if pm25 != 'N/A' and pm25 != '':
-                        previous_data['pm25'] = float(pm25)
-                    if o3 != 'N/A' and o3 != '':
-                        previous_data['o3'] = float(o3)
-                    previous_data['base_hour'] = data_hour
-                except Exception as e:
-                    print(f"設定基準值錯誤: {e}")
-                
-                save_baseline()
-                
-                # 首次執行沒有變化量
+            # 計算所有變化量
+            if previous_hour_data:
+                print(f"  → 計算變化量（當前 vs 前一小時）")
+                aqi_change = calculate_change(aqi, previous_hour_data, 'aqi')
+                pm25_avg_change = calculate_change(pm25_avg, previous_hour_data, 'pm2.5_avg')
+                pm10_avg_change = calculate_change(pm10_avg, previous_hour_data, 'pm10_avg')
+                pm10_change = calculate_change(pm10, previous_hour_data, 'pm10')
+                pm25_change = calculate_change(pm25, previous_hour_data, 'pm2.5')
+                o3_change = calculate_change(o3, previous_hour_data, 'o3')
+            else:
+                print(f"  ⚠️ 無前一小時數據，變化量為空")
                 aqi_change = None
                 pm25_avg_change = None
                 pm10_avg_change = None
                 pm10_change = None
                 pm25_change = None
                 o3_change = None
-                
-            elif data_hour > previous_data['base_hour']:
-                # 偵測到新的整點數據
-                print(f"🔔 偵測到新數據: {data_hour.strftime('%H:00')} (基準: {previous_data['base_hour'].strftime('%H:00')})")
-                
-                # 計算變化量（用舊基準值）
-                aqi_change = calculate_change(aqi, previous_data['aqi'])
-                pm25_avg_change = calculate_change(pm25_avg, previous_data['pm25_avg'])
-                pm10_avg_change = calculate_change(pm10_avg, previous_data['pm10_avg'])
-                pm10_change = calculate_change(pm10, previous_data['pm10'])
-                pm25_change = calculate_change(pm25, previous_data['pm25'])
-                o3_change = calculate_change(o3, previous_data['o3'])
-                
-                print(f"計算變化量 - AQI: {previous_data['aqi']} → {aqi} = {aqi_change}")
-                
-                # 更新基準值為新數據
-                try:
-                    if aqi != 'N/A' and aqi != '':
-                        previous_data['aqi'] = float(aqi)
-                    if pm25_avg != 'N/A' and pm25_avg != '':
-                        previous_data['pm25_avg'] = float(pm25_avg)
-                    if pm10_avg != 'N/A' and pm10_avg != '':
-                        previous_data['pm10_avg'] = float(pm10_avg)
-                    if pm10 != 'N/A' and pm10 != '':
-                        previous_data['pm10'] = float(pm10)
-                    if pm25 != 'N/A' and pm25 != '':
-                        previous_data['pm25'] = float(pm25)
-                    if o3 != 'N/A' and o3 != '':
-                        previous_data['o3'] = float(o3)
-                    previous_data['base_hour'] = data_hour
-                    print(f"✅ 已更新基準值: AQI={previous_data['aqi']}, 時間={data_hour.strftime('%H:00')}")
-                except Exception as e:
-                    print(f"更新基準值錯誤: {e}")
-                
-                save_baseline()
-                
-            else:
-                # 同一整點小時內，保持顯示原有變化量
-                print(f"⏳ 同一整點 {data_hour.strftime('%H:00')}，保持顯示原有變化量")
-                aqi_change = old_aqi_change
-                pm25_avg_change = old_pm25_avg_change
-                pm10_avg_change = old_pm10_avg_change
-                pm10_change = old_pm10_change
-                pm25_change = old_pm25_change
-                o3_change = old_o3_change
             
+            # 4. 判斷空氣品質等級
             def get_level_info(value, thresholds, labels):
                 if value == 'N/A' or value == '':
                     return 'gray', '無資料'
@@ -353,6 +287,7 @@ def fetch_air_quality_data():
             pm25_color, pm25_label = get_level_info(pm25, [15.4, 35.4, 54.4], ['良好', '普通', '對敏感族群不健康', '不健康'])
             o3_color, o3_label = get_level_info(o3, [54, 70, 85], ['良好', '普通', '對敏感族群不健康', '不健康'])
             
+            # 5. 更新全域數據
             latest_data = {
                 'aqi': aqi, 'aqi_color': aqi_color, 'aqi_label': aqi_label, 'aqi_change': aqi_change,
                 'pm25_avg': pm25_avg, 'pm25_avg_color': pm25_avg_color, 'pm25_avg_label': pm25_avg_label, 'pm25_avg_change': pm25_avg_change,
@@ -368,11 +303,14 @@ def fetch_air_quality_data():
             }
             
             print(f"✅ AQI 數據更新成功")
-            print(f"   數據時間: {data_hour.strftime('%H:00')}, 基準時間: {previous_data['base_hour'].strftime('%H:00') if previous_data['base_hour'] else 'None'}")
-            print(f"   當前AQI: {aqi}, 變化: {aqi_change}")
+            print(f"   當前時間: {publish_time_str}")
+            if previous_hour_data:
+                print(f"   前一小時: {previous_hour_data.get('monitordate', 'N/A')}")
+            print(f"   當前 AQI: {aqi}, 變化: {aqi_change}")
             
         else:
             latest_data['has_data'] = False
+            
     except Exception as e:
         print(f"× 抓取 AQI 數據失敗: {e}")
         import traceback
@@ -897,11 +835,12 @@ def background():
         return send_from_directory(directory, filename)
     return "", 404
 
-load_baseline()
+
 fetch_air_quality_data()
 fetch_weather_forecast()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
