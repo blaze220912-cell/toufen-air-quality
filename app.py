@@ -34,7 +34,7 @@ forecast_data = {
 fetch_lock = Lock()
 
 AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
-AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?limit=2&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
+AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?language=zh&limit=12&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 
 def get_taipei_time():
@@ -169,23 +169,47 @@ def fetch_air_quality_data():
     try:
         print(f"正在呼叫 AQI API...")
         
-        # 1. 先呼叫小時值 API，取得前一小時數據
-        print(f"  → 呼叫小時值 API (取前一小時數據)...")
+        # 1. 先呼叫小時值 API，取得過去兩小時的測項數據
+        print(f"  → 呼叫小時值 API (取過去兩小時數據)...")
         hourly_response = requests.get(AQI_HOURLY_API_URL, timeout=10, verify=False)
         print(f"  → 小時值 API 狀態碼: {hourly_response.status_code}")
         
         previous_hour_data = None
         if hourly_response.status_code == 200:
             hourly_data = hourly_response.json()
-            if hourly_data.get('records') and len(hourly_data['records']) >= 2:
+            if hourly_data.get('records') and len(hourly_data['records']) > 0:
                 hourly_records = hourly_data['records']
-                # 排序：由新到舊
-                hourly_records.sort(key=lambda x: x.get('monitordate', ''), reverse=True)
-                # 取第2筆（前一小時）
-                previous_hour_data = hourly_records[1]
-                print(f"  ✓ 取得前一小時數據: {previous_hour_data.get('monitordate', 'N/A')}")
-            elif hourly_data.get('records') and len(hourly_data['records']) == 1:
-                print(f"  ⚠️ 小時值 API 只有1筆數據，無法取得前一小時")
+                print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
+                
+                # 將垂直格式轉換為水平格式
+                # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
+                # 水平: {"2025-10-20 19:00": {"PM2.5": "10", "PM10": "25", ...}, ...}
+                grouped_data = {}
+                for record in hourly_records:
+                    if record.get('sitename') == '頭份':
+                        monitor_date = record.get('monitordate', '')
+                        item_name = record.get('itemname', '')
+                        concentration = record.get('concentration', 'N/A')
+                        
+                        if monitor_date not in grouped_data:
+                            grouped_data[monitor_date] = {}
+                        
+                        grouped_data[monitor_date][item_name] = concentration
+                
+                # 排序取得最新兩個小時
+                sorted_dates = sorted(grouped_data.keys(), reverse=True)
+                print(f"  ✓ 找到 {len(sorted_dates)} 個不同時間點: {sorted_dates[:2]}")
+                
+                if len(sorted_dates) >= 2:
+                    latest_hour = sorted_dates[0]
+                    previous_hour = sorted_dates[1]
+                    previous_hour_data = grouped_data[previous_hour]
+                    print(f"  ✓ 前一小時數據: {previous_hour}")
+                    print(f"  🔍 前一小時測項: {list(previous_hour_data.keys())}")
+                elif len(sorted_dates) == 1:
+                    print(f"  ⚠️ 只有1個時間點的數據，無法計算變化量")
+                else:
+                    print(f"  ⚠️ 無有效數據")
             else:
                 print(f"  ⚠️ 小時值 API 無數據")
         else:
@@ -225,7 +249,20 @@ def fetch_air_quality_data():
                 if current == 'N/A' or current == '' or previous_data is None:
                     return None
                 
-                previous_value = previous_data.get(key, 'N/A')
+                # 小時值 API 的測項名稱對應
+                item_name_mapping = {
+                    'pm2.5_avg': 'PM2.5',
+                    'pm10_avg': 'PM10',
+                    'pm2.5': 'PM2.5',
+                    'pm10': 'PM10',
+                    'o3': 'O3'
+                }
+                
+                item_name = item_name_mapping.get(key)
+                if not item_name:
+                    return None
+                
+                previous_value = previous_data.get(item_name, 'N/A')
                 if previous_value == 'N/A' or previous_value == '':
                     return None
                 
@@ -239,7 +276,7 @@ def fetch_air_quality_data():
                         result = f"↓ {change:.1f}"
                     else:
                         result = "─ 0"
-                    print(f"  計算 {key}: {prev_val} → {curr_val} = {result}")
+                    print(f"  計算 {key} ({item_name}): {prev_val} → {curr_val} = {result}")
                     return result
                 except Exception as e:
                     print(f"  計算 {key} 錯誤: {e}")
@@ -248,7 +285,7 @@ def fetch_air_quality_data():
             # 計算所有變化量
             if previous_hour_data:
                 print(f"  → 計算變化量（當前 vs 前一小時）")
-                aqi_change = calculate_change(aqi, previous_hour_data, 'aqi')
+                aqi_change = None  # 小時值 API 沒有 AQI
                 pm25_avg_change = calculate_change(pm25_avg, previous_hour_data, 'pm2.5_avg')
                 pm10_avg_change = calculate_change(pm10_avg, previous_hour_data, 'pm10_avg')
                 pm10_change = calculate_change(pm10, previous_hour_data, 'pm10')
@@ -305,8 +342,9 @@ def fetch_air_quality_data():
             print(f"✅ AQI 數據更新成功")
             print(f"   當前時間: {publish_time_str}")
             if previous_hour_data:
-                print(f"   前一小時: {previous_hour_data.get('monitordate', 'N/A')}")
-            print(f"   當前 AQI: {aqi}, 變化: {aqi_change}")
+                print(f"   前一小時有 {len(previous_hour_data)} 個測項")
+            print(f"   當前 AQI: {aqi} (無變化量)")
+            print(f"   PM2.5 avg: {pm25_avg}, 變化: {pm25_avg_change}")
             
         else:
             latest_data['has_data'] = False
@@ -842,5 +880,6 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
