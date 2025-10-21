@@ -71,7 +71,6 @@ def fetch_weather_forecast():
             if len(locations) > 0:
                 location = locations[0]
                 weather_elements = location['WeatherElement']
-             
                 
                 # 取得第一筆時間資料(最接近當前)
                 temp_element = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
@@ -96,7 +95,7 @@ def fetch_weather_forecast():
                 weather_desc = 'N/A'
                 pop = 'N/A'
                 
-               if temp_element and len(temp_element['Time']) > 0:
+                if temp_element and len(temp_element['Time']) > 0:
                     # 取得當前時間並計算下一個整點
                     current_time = get_taipei_time()
                     next_hour = (current_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
@@ -189,12 +188,6 @@ def fetch_weather_forecast():
         traceback.print_exc()
         forecast_data['has_data'] = False
         
-    except Exception as e:
-        print(f"× 抓取預報數據失敗: {e}")
-        import traceback
-        traceback.print_exc()
-        forecast_data['has_data'] = False
-
 # 抓取空氣品質(右側)
 def fetch_air_quality_data():
     global latest_data
@@ -912,6 +905,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
