@@ -650,6 +650,7 @@ HTML_TEMPLATE = """
         
         .alert-container {
             margin-bottom: 20px;
+            transition: opacity 0.5s ease-in-out;
         }
         .weather-alert {
             padding: 15px 20px;
@@ -743,13 +744,31 @@ HTML_TEMPLATE = """
                             updateElement('[data-forecast-time]', data.forecast_data.forecast_time);
                         }
                         
-                        // 更新警特報（重新載入頁面才會更新 DOM）
-if (data.alert_data && data.alert_data.has_alert !== undefined) {
-    // 警特報變化時重新載入頁面
-    const currentAlertStatus = document.querySelector('.alert-container') !== null;
-    if (data.alert_data.has_alert !== currentAlertStatus) {
-        console.log('⚠️ 警特報狀態變化，重新載入頁面');
-        location.reload();
+                        // 更新警特報（動態更新 DOM）
+if (data.alert_data) {
+    const alertContainer = document.getElementById('alert-container');
+    if (alertContainer) {
+        if (data.alert_data.has_alert && data.alert_data.alerts.length > 0) {
+            // 有警報：動態生成警報 HTML
+            let alertsHTML = '';
+            data.alert_data.alerts.forEach(alert => {
+                alertsHTML += `
+                    <div class="weather-alert alert-${alert.color}">
+                        <div class="alert-icon">⚠️</div>
+                        <div class="alert-content">
+                            <div class="alert-title">${alert.phenomena}${alert.significance}</div>
+                            <div class="alert-time">生效時間：${alert.start_time} ~ ${alert.end_time}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            alertContainer.innerHTML = alertsHTML;
+            alertContainer.style.display = 'block';
+        } else {
+            // 無警報：清空並隱藏
+            alertContainer.innerHTML = '';
+            alertContainer.style.display = 'none';
+        }
     }
 }
 
@@ -796,8 +815,8 @@ updateElement('[data-page-time]', data.page_load_time);
     <h2>🌤️ 天氣預報</h2>
     
     <!-- 天氣警特報區域 -->
+<div class="alert-container" id="alert-container">
     {% if alerts.has_alert %}
-    <div class="alert-container">
         {% for alert in alerts.alerts %}
         <div class="weather-alert alert-{{ alert.color }}">
             <div class="alert-icon">⚠️</div>
@@ -807,8 +826,8 @@ updateElement('[data-page-time]', data.page_load_time);
             </div>
         </div>
         {% endfor %}
-    </div>
     {% endif %}
+</div>
     
     <div class="site-info">頭份市</div>
             
@@ -1083,6 +1102,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
