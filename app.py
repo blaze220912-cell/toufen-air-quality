@@ -71,12 +71,7 @@ def fetch_weather_forecast():
             if len(locations) > 0:
                 location = locations[0]
                 weather_elements = location['WeatherElement']
-                
-                # 🔍 DEBUG: 看看 API 回傳幾筆預報時間
-                temp_element_debug = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
-                if temp_element_debug:
-                    all_times = [t['DataTime'] for t in temp_element_debug['Time']]
-                    print(f"  🔍 DEBUG - API 回傳的所有預報時間: {all_times[:5]}")
+             
                 
                 # 取得第一筆時間資料(最接近當前)
                 temp_element = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
@@ -102,10 +97,31 @@ def fetch_weather_forecast():
                 pop = 'N/A'
                 
                 if temp_element and len(temp_element['Time']) > 0:
-                    first_time = temp_element['Time'][0]
-                    forecast_time = first_time.get('DataTime', 'N/A')
-                    temp = first_time['ElementValue'][0].get('Temperature', 'N/A')
-                    print(f"  預報時間: {forecast_time}, 取得第一筆資料")
+    # 取得當前時間並計算下一個整點
+    current_time = get_taipei_time()
+    next_hour = (current_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    print(f"  當前時間: {current_time.strftime('%H:%M')}, 尋找下一整點: {next_hour.strftime('%H:00')}")
+    
+    # 找到符合下一整點的預報
+    target_time = None
+    for time_data in temp_element['Time']:
+        data_time_str = time_data.get('DataTime', '')
+        try:
+            data_time = datetime.fromisoformat(data_time_str.replace('+08:00', ''))
+            if data_time.hour == next_hour.hour and data_time.date() == next_hour.date():
+                target_time = time_data
+                break
+        except:
+            continue
+    
+    # 如果找不到，用第一筆
+    if target_time is None:
+        print(f"  ⚠️ 找不到 {next_hour.strftime('%H:00')} 的預報，使用第一筆")
+        target_time = temp_element['Time'][0]
+    
+    forecast_time = target_time.get('DataTime', 'N/A')
+    temp = target_time['ElementValue'][0].get('Temperature', 'N/A')
+    print(f"  ✓ 預報時間: {forecast_time}")
                 
                 if feels_element and len(feels_element['Time']) > 0:
                     feels_like = feels_element['Time'][0]['ElementValue'][0].get('ApparentTemperature', 'N/A')
@@ -886,6 +902,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
