@@ -185,7 +185,7 @@ def fetch_weather_forecast():
                         'humidity': humidity,
                         'wind_display': wind_display,
                         'weather_desc': weather_desc,
-                        'pop': pop,
+                        'pop': rain_prob,
                         'forecast_time': forecast_time_display,
                         'has_data': True,
                         'last_fetch': get_taipei_time()
@@ -1102,6 +1102,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
