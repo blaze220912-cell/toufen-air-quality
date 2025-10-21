@@ -157,7 +157,7 @@ def fetch_weather_forecast():
                         weather_desc = weather_element['Time'][target_index]['ElementValue'][0].get('Weather', 'N/A')
                     
                     if pop_element and len(pop_element['Time']) > target_index:
-                        pop = pop_element['Time'][target_index]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
+                        rain_prob = pop_element['Time'][target_index]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
                     
                     # 組合風速風向顯示
                     if wind_dir != 'N/A' and wind_speed != 'N/A' and wind_scale != 'N/A':
@@ -1102,6 +1102,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
