@@ -31,11 +31,19 @@ forecast_data = {
     'has_data': False, 'last_fetch': None
 }
 
+# 天氣警特報數據
+alert_data = {
+    'has_alert': False,
+    'alerts': [],
+    'last_fetch': None
+}
+
 fetch_lock = Lock()
 
 AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8&filters=SiteName,EQ,頭份"
 AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?language=en&limit=12&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8"
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
+WEATHER_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&locationName=苗栗縣"
 
 def get_taipei_time():
     return datetime.now(TAIPEI_TZ)
@@ -194,6 +202,81 @@ def fetch_weather_forecast():
         import traceback
         traceback.print_exc()
         forecast_data['has_data'] = False
+
+# 抓取天氣警特報
+def fetch_weather_alerts():
+    global alert_data
+    try:
+        print(f"正在呼叫天氣警特報 API...")
+        response = requests.get(WEATHER_ALERT_API_URL, timeout=10)
+        print(f"警特報 API 狀態碼: {response.status_code}")
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('success') == 'true' and data.get('records'):
+            locations = data['records'].get('location', [])
+            
+            if len(locations) > 0:
+                location = locations[0]
+                hazard_conditions = location.get('hazardConditions', {})
+                hazards = hazard_conditions.get('hazards', [])
+                
+                if len(hazards) > 0:
+                    # 有警報
+                    alerts_list = []
+                    for hazard in hazards:
+                        info = hazard.get('info', {})
+                        valid_time = hazard.get('validTime', {})
+                        
+                        phenomena = info.get('phenomena', 'N/A')
+                        significance = info.get('significance', 'N/A')
+                        start_time = valid_time.get('startTime', 'N/A')
+                        end_time = valid_time.get('endTime', 'N/A')
+                        
+                        # 判斷警報顏色等級
+                        alert_color = 'orange'  # 預設橙色
+                        if '颱風' in phenomena:
+                            alert_color = 'red'
+                        elif '豪雨' in phenomena or '強風' in phenomena:
+                            alert_color = 'orange'
+                        elif '大雨' in phenomena or '濃霧' in phenomena:
+                            alert_color = 'yellow'
+                        
+                        alerts_list.append({
+                            'phenomena': phenomena,
+                            'significance': significance,
+                            'start_time': start_time,
+                            'end_time': end_time,
+                            'color': alert_color
+                        })
+                    
+                    alert_data = {
+                        'has_alert': True,
+                        'alerts': alerts_list,
+                        'last_fetch': get_taipei_time()
+                    }
+                    
+                    print(f"✓ 警特報數據更新成功：{len(alerts_list)} 則警報")
+                    for alert in alerts_list:
+                        print(f"  ⚠️ {alert['phenomena']}{alert['significance']}")
+                else:
+                    # 無警報
+                    alert_data = {
+                        'has_alert': False,
+                        'alerts': [],
+                        'last_fetch': get_taipei_time()
+                    }
+                    print(f"✓ 目前無天氣警特報")
+            else:
+                alert_data['has_alert'] = False
+        else:
+            alert_data['has_alert'] = False
+            
+    except Exception as e:
+        print(f"× 抓取警特報數據失敗: {e}")
+        import traceback
+        traceback.print_exc()
+        alert_data['has_alert'] = False
         
 # 抓取空氣品質(右側)
 def fetch_air_quality_data():
@@ -387,11 +470,11 @@ def fetch_air_quality_data():
         traceback.print_exc()
         latest_data['has_data'] = False
 def should_fetch_data():
-    """檢查是否需要更新數據 - 兩個數據源都要考慮"""
+    """檢查是否需要更新數據 - 三個數據源都要考慮"""
     current_time = get_taipei_time()
     
     # 如果任一數據未初始化,需要更新
-    if latest_data['last_fetch'] is None or forecast_data['last_fetch'] is None:
+    if latest_data['last_fetch'] is None or forecast_data['last_fetch'] is None or alert_data['last_fetch'] is None:
         return True
     
     # 檢查空品數據是否超過5分鐘
@@ -400,8 +483,11 @@ def should_fetch_data():
     # 檢查預報數據是否超過5分鐘
     forecast_expired = current_time - forecast_data['last_fetch'] > timedelta(minutes=5)
     
+    # 檢查警特報數據是否超過5分鐘
+    alert_expired = current_time - alert_data['last_fetch'] > timedelta(minutes=5)
+    
     # 任一個過期就需要更新
-    return aqi_expired or forecast_expired
+    return aqi_expired or forecast_expired or alert_expired
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -562,6 +648,60 @@ HTML_TEMPLATE = """
             border: 2px solid #ffc107;
         }
         
+        .alert-container {
+            margin-bottom: 20px;
+        }
+        .weather-alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            animation: alertPulse 2s ease-in-out infinite;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .weather-alert.alert-red {
+            background: linear-gradient(135deg, #ff4757 0%, #e84118 100%);
+            color: white;
+            border: 2px solid #c23616;
+        }
+        .weather-alert.alert-orange {
+            background: linear-gradient(135deg, #ffa502 0%, #ff6348 100%);
+            color: white;
+            border: 2px solid #e17055;
+        }
+        .weather-alert.alert-yellow {
+            background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%);
+            color: #333;
+            border: 2px solid #f39c12;
+        }
+        .alert-icon {
+            font-size: 2em;
+            animation: shake 0.5s ease-in-out infinite;
+        }
+        .alert-content {
+            flex: 1;
+        }
+        .alert-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .alert-time {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        @keyframes alertPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+        }
+        
         @media (max-width: 1024px) {
             .main-container { grid-template-columns: 1fr; }
         }
@@ -603,7 +743,17 @@ HTML_TEMPLATE = """
                             updateElement('[data-forecast-time]', data.forecast_data.forecast_time);
                         }
                         
-                        updateElement('[data-page-time]', data.page_load_time);
+                        // 更新警特報（重新載入頁面才會更新 DOM）
+if (data.alert_data && data.alert_data.has_alert !== undefined) {
+    // 警特報變化時重新載入頁面
+    const currentAlertStatus = document.querySelector('.alert-container') !== null;
+    if (data.alert_data.has_alert !== currentAlertStatus) {
+        console.log('⚠️ 警特報狀態變化，重新載入頁面');
+        location.reload();
+    }
+}
+
+updateElement('[data-page-time]', data.page_load_time);
                         
                         console.log('✓ 數據更新成功', new Date().toLocaleTimeString());
                     }
@@ -642,9 +792,25 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="main-container">
-        <div class="weather-container">
-            <h2>🌤️ 天氣預報</h2>
-            <div class="site-info">頭份市</div>
+<div class="weather-container">
+    <h2>🌤️ 天氣預報</h2>
+    
+    <!-- 天氣警特報區域 -->
+    {% if alerts.has_alert %}
+    <div class="alert-container">
+        {% for alert in alerts.alerts %}
+        <div class="weather-alert alert-{{ alert.color }}">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+                <div class="alert-title">{{ alert.phenomena }}{{ alert.significance }}</div>
+                <div class="alert-time">生效時間：{{ alert.start_time }} ~ {{ alert.end_time }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="site-info">頭份市</div>
             
             {% if forecast.has_data %}
             <div class="weather-desc-box"><span data-forecast-weather>{{ forecast.weather_desc }}</span></div>
@@ -870,17 +1036,19 @@ def index():
             if should_fetch_data():
                 fetch_air_quality_data()
                 fetch_weather_forecast()
+                fetch_weather_alerts()
     
     bg_exists = os.path.exists(BACKGROUND_IMAGE)
     page_load_time = get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     
     return render_template_string(
-        HTML_TEMPLATE, 
-        data=latest_data,
-        forecast=forecast_data,
-        page_load_time=page_load_time,
-        bg_image=BACKGROUND_IMAGE if bg_exists else None
-    )
+    HTML_TEMPLATE, 
+    data=latest_data,
+    forecast=forecast_data,
+    alerts=alert_data,  # ← 加這一行
+    page_load_time=page_load_time,
+    bg_image=BACKGROUND_IMAGE if bg_exists else None
+)
 
 @app.route('/api/data')
 def api_data():
@@ -889,11 +1057,13 @@ def api_data():
             if should_fetch_data():
                 fetch_air_quality_data()
                 fetch_weather_forecast()
+                fetch_weather_alerts()  # ← 加這一行
     
     return {
         'success': True,
         'aqi_data': latest_data,
         'forecast_data': forecast_data,
+        'alert_data': alert_data,  # ← 加這一行
         'page_load_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     }
 
@@ -908,10 +1078,12 @@ def background():
 
 fetch_air_quality_data()
 fetch_weather_forecast()
+fetch_weather_alerts()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
