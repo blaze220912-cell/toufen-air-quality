@@ -96,87 +96,97 @@ def fetch_weather_forecast():
                 weather_desc = 'N/A'
                 pop = 'N/A'
                 
-                if temp_element and len(temp_element['Time']) > 0:
-    # 取得當前時間並計算下一個整點
-    current_time = get_taipei_time()
-    next_hour = (current_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-    print(f"  當前時間: {current_time.strftime('%H:%M')}, 尋找下一整點: {next_hour.strftime('%H:00')}")
-    
-    # 找到符合下一整點的預報
-    target_time = None
-    for time_data in temp_element['Time']:
-        data_time_str = time_data.get('DataTime', '')
-        try:
-            data_time = datetime.fromisoformat(data_time_str.replace('+08:00', ''))
-            if data_time.hour == next_hour.hour and data_time.date() == next_hour.date():
-                target_time = time_data
-                break
-        except:
-            continue
-    
-    # 如果找不到，用第一筆
-    if target_time is None:
-        print(f"  ⚠️ 找不到 {next_hour.strftime('%H:00')} 的預報，使用第一筆")
-        target_time = temp_element['Time'][0]
-    
-    forecast_time = target_time.get('DataTime', 'N/A')
-    temp = target_time['ElementValue'][0].get('Temperature', 'N/A')
-    print(f"  ✓ 預報時間: {forecast_time}")
-                
-                if feels_element and len(feels_element['Time']) > 0:
-                    feels_like = feels_element['Time'][0]['ElementValue'][0].get('ApparentTemperature', 'N/A')
-                
-                if comfort_element and len(comfort_element['Time']) > 0:
-                    comfort_value = comfort_element['Time'][0]['ElementValue'][0]
-                    comfort_index = comfort_value.get('ComfortIndex', 'N/A')
-                    comfort_desc = comfort_value.get('ComfortIndexDescription', '無資料')
-                
-                if humidity_element and len(humidity_element['Time']) > 0:
-                    humidity = humidity_element['Time'][0]['ElementValue'][0].get('RelativeHumidity', 'N/A')
-                
-                if wind_speed_element and len(wind_speed_element['Time']) > 0:
-                    wind_value = wind_speed_element['Time'][0]['ElementValue'][0]
-                    wind_speed = wind_value.get('WindSpeed', 'N/A')
-                    wind_scale = wind_value.get('BeaufortScale', 'N/A')
-                
-                if wind_dir_element and len(wind_dir_element['Time']) > 0:
-                    wind_dir = wind_dir_element['Time'][0]['ElementValue'][0].get('WindDirection', 'N/A')
-                
-                if weather_element and len(weather_element['Time']) > 0:
-                    weather_desc = weather_element['Time'][0]['ElementValue'][0].get('Weather', 'N/A')
-                
-                if pop_element and len(pop_element['Time']) > 0:
-                    pop = pop_element['Time'][0]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
-                
-                # 組合風速風向顯示
-                if wind_dir != 'N/A' and wind_speed != 'N/A' and wind_scale != 'N/A':
-                    wind_display = f"{wind_dir} 平均風速{wind_scale}級(每秒{wind_speed}公尺)"
-                else:
-                    wind_display = 'N/A'
-                
-                # 取得舒適度表情
-                comfort_emoji, comfort_color = get_comfort_emoji_color(comfort_desc)
-                
-                forecast_data = {
-                    'temp': temp,
-                    'feels_like': feels_like,
-                    'comfort_index': comfort_index,
-                    'comfort_desc': comfort_desc,
-                    'comfort_emoji': comfort_emoji,
-                    'comfort_color': comfort_color,
-                    'humidity': humidity,
-                    'wind_display': wind_display,
-                    'weather_desc': weather_desc,
-                    'pop': pop,
-                    'forecast_time': forecast_time,
-                    'has_data': True,
-                    'last_fetch': get_taipei_time()
-                }
-                
-                print(f"✓ 預報數據更新成功")
-                print(f"  溫度: {temp}°C, 舒適度: {comfort_desc}")
-                return
+               if temp_element and len(temp_element['Time']) > 0:
+                    # 取得當前時間並計算下一個整點
+                    current_time = get_taipei_time()
+                    next_hour = (current_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+                    print(f"  當前時間: {current_time.strftime('%H:%M')}, 尋找下一整點: {next_hour.strftime('%H:00')}")
+                    
+                    # 找到符合下一整點的預報
+                    target_time = None
+                    target_index = 0
+                    for i, time_data in enumerate(temp_element['Time']):
+                        data_time_str = time_data.get('DataTime', '')
+                        try:
+                            data_time = datetime.fromisoformat(data_time_str.replace('+08:00', ''))
+                            if data_time.hour == next_hour.hour and data_time.date() == next_hour.date():
+                                target_time = time_data
+                                target_index = i
+                                break
+                        except:
+                            continue
+                    
+                    # 如果找不到，用第一筆
+                    if target_time is None:
+                        print(f"  ⚠️ 找不到 {next_hour.strftime('%H:00')} 的預報，使用第一筆")
+                        target_time = temp_element['Time'][0]
+                        target_index = 0
+                    
+                    forecast_time = target_time.get('DataTime', 'N/A')
+                    temp = target_time['ElementValue'][0].get('Temperature', 'N/A')
+                    print(f"  ✓ 預報時間: {forecast_time}")
+                    
+                    # 其他氣象要素使用相同索引
+                    if feels_element and len(feels_element['Time']) > target_index:
+                        feels_like = feels_element['Time'][target_index]['ElementValue'][0].get('ApparentTemperature', 'N/A')
+                    
+                    if comfort_element and len(comfort_element['Time']) > target_index:
+                        comfort_value = comfort_element['Time'][target_index]['ElementValue'][0]
+                        comfort_index = comfort_value.get('ComfortIndex', 'N/A')
+                        comfort_desc = comfort_value.get('ComfortIndexDescription', '無資料')
+                    
+                    if humidity_element and len(humidity_element['Time']) > target_index:
+                        humidity = humidity_element['Time'][target_index]['ElementValue'][0].get('RelativeHumidity', 'N/A')
+                    
+                    if wind_speed_element and len(wind_speed_element['Time']) > target_index:
+                        wind_value = wind_speed_element['Time'][target_index]['ElementValue'][0]
+                        wind_speed = wind_value.get('WindSpeed', 'N/A')
+                        wind_scale = wind_value.get('BeaufortScale', 'N/A')
+                    
+                    if wind_dir_element and len(wind_dir_element['Time']) > target_index:
+                        wind_dir = wind_dir_element['Time'][target_index]['ElementValue'][0].get('WindDirection', 'N/A')
+                    
+                    if weather_element and len(weather_element['Time']) > target_index:
+                        weather_desc = weather_element['Time'][target_index]['ElementValue'][0].get('Weather', 'N/A')
+                    
+                    if pop_element and len(pop_element['Time']) > target_index:
+                        pop = pop_element['Time'][target_index]['ElementValue'][0].get('ProbabilityOfPrecipitation', 'N/A')
+                    
+                    # 組合風速風向顯示
+                    if wind_dir != 'N/A' and wind_speed != 'N/A' and wind_scale != 'N/A':
+                        wind_display = f"{wind_dir} 平均風速{wind_scale}級(每秒{wind_speed}公尺)"
+                    else:
+                        wind_display = 'N/A'
+                    
+                    # 取得舒適度表情
+                    comfort_emoji, comfort_color = get_comfort_emoji_color(comfort_desc)
+                    
+                    forecast_data = {
+                        'temp': temp,
+                        'feels_like': feels_like,
+                        'comfort_index': comfort_index,
+                        'comfort_desc': comfort_desc,
+                        'comfort_emoji': comfort_emoji,
+                        'comfort_color': comfort_color,
+                        'humidity': humidity,
+                        'wind_display': wind_display,
+                        'weather_desc': weather_desc,
+                        'pop': pop,
+                        'forecast_time': forecast_time,
+                        'has_data': True,
+                        'last_fetch': get_taipei_time()
+                    }
+                    
+                    print(f"✓ 預報數據更新成功")
+                    print(f"  溫度: {temp}°C, 舒適度: {comfort_desc}")
+                    return
         
+        forecast_data['has_data'] = False
+        
+    except Exception as e:
+        print(f"× 抓取預報數據失敗: {e}")
+        import traceback
+        traceback.print_exc()
         forecast_data['has_data'] = False
         
     except Exception as e:
@@ -902,6 +912,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
