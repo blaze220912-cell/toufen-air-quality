@@ -159,6 +159,13 @@ def fetch_weather_forecast():
                     
                     # 取得舒適度表情
                     comfort_emoji, comfort_color = get_comfort_emoji_color(comfort_desc)
+
+                    
+                    try:
+                        dt = datetime.fromisoformat(forecast_time.replace('+08:00', ''))
+                        forecast_time_display = dt.strftime('%m/%d %H:%M')
+                    except:
+                        forecast_time_display = forecast_time
                     
                     forecast_data = {
                         'temp': temp,
@@ -171,7 +178,7 @@ def fetch_weather_forecast():
                         'wind_display': wind_display,
                         'weather_desc': weather_desc,
                         'pop': pop,
-                        'forecast_time': forecast_time,
+                        'forecast_time': forecast_time_display,
                         'has_data': True,
                         'last_fetch': get_taipei_time()
                     }
@@ -905,6 +912,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
