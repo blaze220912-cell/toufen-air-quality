@@ -72,10 +72,10 @@ def fetch_weather_forecast():
                 location = locations[0]
                 weather_elements = location['WeatherElement']
                 
-                temp_element_debug = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
-                if temp_element_debug:
-                all_times = [t['DataTime'] for t in temp_element_debug['Time']]
-                print(f"  🔍 DEBUG - API 回傳的所有預報時間: {all_times[:5]}")  # 只顯示前5筆
+               temp_element_debug = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
+               if temp_element_debug:
+                     all_times = [t['DataTime'] for t in temp_element_debug['Time']]
+                     print(f"  🔍 DEBUG - API 回傳的所有預報時間: {all_times[:5]}")  # 只顯示前5筆
                 
                 # 取得第一筆時間資料(最接近當前)
                 temp_element = next((e for e in weather_elements if e['ElementName'] == '溫度'), None)
@@ -885,6 +885,7 @@ fetch_weather_forecast()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
