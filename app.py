@@ -591,7 +591,7 @@ HTML_TEMPLATE = """
             border-radius: 15px;
             text-align: center;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, background 0.5s ease;
         }
         .data-card.green { background: linear-gradient(135deg, #00d084 0%, #00a86b 100%); }
         .data-card.yellow { background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%); }
@@ -728,6 +728,22 @@ HTML_TEMPLATE = """
                             updateChange('[data-pm10-change]', data.aqi_data.pm10_change);
                             updateChange('[data-o3-change]', data.aqi_data.o3_change);
                             
+                            // 更新背景顏色 - 新增功能！
+                            updateCardColor('[data-aqi]', data.aqi_data.aqi_color);
+                            updateCardColor('[data-pm25-avg]', data.aqi_data.pm25_avg_color);
+                            updateCardColor('[data-pm10-avg]', data.aqi_data.pm10_avg_color);
+                            updateCardColor('[data-pm25]', data.aqi_data.pm25_color);
+                            updateCardColor('[data-pm10]', data.aqi_data.pm10_color);
+                            updateCardColor('[data-o3]', data.aqi_data.o3_color);
+                            
+                            // 更新狀態標籤 - 新增功能！
+                            updateStatus('[data-aqi]', data.aqi_data.aqi_label);
+                            updateStatus('[data-pm25-avg]', data.aqi_data.pm25_avg_label);
+                            updateStatus('[data-pm10-avg]', data.aqi_data.pm10_avg_label);
+                            updateStatus('[data-pm25]', data.aqi_data.pm25_label);
+                            updateStatus('[data-pm10]', data.aqi_data.pm10_label);
+                            updateStatus('[data-o3]', data.aqi_data.o3_label);
+                            
                             updateElement('[data-publish-time]', data.aqi_data.publish_time);
                         }
                         
@@ -745,34 +761,34 @@ HTML_TEMPLATE = """
                         }
                         
                         // 更新警特報（動態更新 DOM）
-if (data.alert_data) {
-    const alertContainer = document.getElementById('alert-container');
-    if (alertContainer) {
-        if (data.alert_data.has_alert && data.alert_data.alerts.length > 0) {
-            // 有警報：動態生成警報 HTML
-            let alertsHTML = '';
-            data.alert_data.alerts.forEach(alert => {
-                alertsHTML += `
-                    <div class="weather-alert alert-${alert.color}">
-                        <div class="alert-icon">⚠️</div>
-                        <div class="alert-content">
-                            <div class="alert-title">${alert.phenomena}${alert.significance}</div>
-                            <div class="alert-time">生效時間：${alert.start_time} ~ ${alert.end_time}</div>
-                        </div>
-                    </div>
-                `;
-            });
-            alertContainer.innerHTML = alertsHTML;
-            alertContainer.style.display = 'block';
-        } else {
-            // 無警報：清空並隱藏
-            alertContainer.innerHTML = '';
-            alertContainer.style.display = 'none';
-        }
-    }
-}
+                        if (data.alert_data) {
+                            const alertContainer = document.getElementById('alert-container');
+                            if (alertContainer) {
+                                if (data.alert_data.has_alert && data.alert_data.alerts.length > 0) {
+                                    // 有警報：動態生成警報 HTML
+                                    let alertsHTML = '';
+                                    data.alert_data.alerts.forEach(alert => {
+                                        alertsHTML += `
+                                            <div class="weather-alert alert-${alert.color}">
+                                                <div class="alert-icon">⚠️</div>
+                                                <div class="alert-content">
+                                                    <div class="alert-title">${alert.phenomena}${alert.significance}</div>
+                                                    <div class="alert-time">生效時間：${alert.start_time} ~ ${alert.end_time}</div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    });
+                                    alertContainer.innerHTML = alertsHTML;
+                                    alertContainer.style.display = 'block';
+                                } else {
+                                    // 無警報：清空並隱藏
+                                    alertContainer.innerHTML = '';
+                                    alertContainer.style.display = 'none';
+                                }
+                            }
+                        }
 
-updateElement('[data-page-time]', data.page_load_time);
+                        updateElement('[data-page-time]', data.page_load_time);
                         
                         console.log('✓ 數據更新成功', new Date().toLocaleTimeString());
                     }
@@ -805,31 +821,64 @@ updateElement('[data-page-time]', data.page_load_time);
             }
         }
         
-        setInterval(updateData, 300000);
-        setTimeout(updateData, 10000);
+        // 新增函數：更新卡片背景顏色
+        function updateCardColor(selector, colorClass) {
+            const el = document.querySelector(selector);
+            if (el) {
+                // 找到父層的 data-card
+                const card = el.closest('.data-card');
+                if (card) {
+                    // 移除所有顏色 class
+                    card.classList.remove('green', 'yellow', 'orange', 'red', 'gray');
+                    // 加上新的顏色 class
+                    if (colorClass) {
+                        card.classList.add(colorClass);
+                    }
+                }
+            }
+        }
+        
+        // 新增函數：更新狀態標籤文字
+        function updateStatus(selector, statusText) {
+            const el = document.querySelector(selector);
+            if (el) {
+                // 找到父層的 data-card
+                const card = el.closest('.data-card');
+                if (card) {
+                    // 找到 .data-status 元素
+                    const statusEl = card.querySelector('.data-status');
+                    if (statusEl && statusText) {
+                        statusEl.textContent = statusText;
+                    }
+                }
+            }
+        }
+        
+        setInterval(updateData, 300000);  // 每5分鐘更新一次
+        setTimeout(updateData, 10000);    // 10秒後首次自動更新
     </script>
 </head>
 <body>
     <div class="main-container">
-<div class="weather-container">
-    <h2>🌤️ 天氣預報</h2>
-    
-    <!-- 天氣警特報區域 -->
-<div class="alert-container" id="alert-container">
-    {% if alerts.has_alert %}
-        {% for alert in alerts.alerts %}
-        <div class="weather-alert alert-{{ alert.color }}">
-            <div class="alert-icon">⚠️</div>
-            <div class="alert-content">
-                <div class="alert-title">{{ alert.phenomena }}{{ alert.significance }}</div>
-                <div class="alert-time">生效時間：{{ alert.start_time }} ~ {{ alert.end_time }}</div>
+        <div class="weather-container">
+            <h2>🌤️ 天氣預報</h2>
+            
+            <!-- 天氣警特報區域 -->
+            <div class="alert-container" id="alert-container">
+                {% if alerts.has_alert %}
+                    {% for alert in alerts.alerts %}
+                    <div class="weather-alert alert-{{ alert.color }}">
+                        <div class="alert-icon">⚠️</div>
+                        <div class="alert-content">
+                            <div class="alert-title">{{ alert.phenomena }}{{ alert.significance }}</div>
+                            <div class="alert-time">生效時間：{{ alert.start_time }} ~ {{ alert.end_time }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
             </div>
-        </div>
-        {% endfor %}
-    {% endif %}
-</div>
     
-    <div class="site-info">頭份市</div>
+            <div class="site-info">頭份市</div>
             
             {% if forecast.has_data %}
             <div class="weather-desc-box"><span data-forecast-weather>{{ forecast.weather_desc }}</span></div>
@@ -1061,13 +1110,13 @@ def index():
     page_load_time = get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     
     return render_template_string(
-    HTML_TEMPLATE, 
-    data=latest_data,
-    forecast=forecast_data,
-    alerts=alert_data,  # ← 加這一行
-    page_load_time=page_load_time,
-    bg_image=BACKGROUND_IMAGE if bg_exists else None
-)
+        HTML_TEMPLATE, 
+        data=latest_data,
+        forecast=forecast_data,
+        alerts=alert_data,
+        page_load_time=page_load_time,
+        bg_image=BACKGROUND_IMAGE if bg_exists else None
+    )
 
 @app.route('/api/data')
 def api_data():
@@ -1076,13 +1125,13 @@ def api_data():
             if should_fetch_data():
                 fetch_air_quality_data()
                 fetch_weather_forecast()
-                fetch_weather_alerts()  # ← 加這一行
+                fetch_weather_alerts()
     
     return {
         'success': True,
         'aqi_data': latest_data,
         'forecast_data': forecast_data,
-        'alert_data': alert_data,  # ← 加這一行
+        'alert_data': alert_data,
         'page_load_time': get_taipei_time().strftime('%Y-%m-%d %H:%M:%S')
     }
 
@@ -1102,28 +1151,3 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
