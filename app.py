@@ -477,14 +477,14 @@ def should_fetch_data():
     if latest_data['last_fetch'] is None or forecast_data['last_fetch'] is None or alert_data['last_fetch'] is None:
         return True
     
-    # 檢查空品數據是否超過5分鐘
-    aqi_expired = current_time - latest_data['last_fetch'] > timedelta(minutes=5)
+    # 檢查空品數據是否超過3分鐘
+    aqi_expired = current_time - latest_data['last_fetch'] > timedelta(minutes=3)
     
-    # 檢查預報數據是否超過5分鐘
-    forecast_expired = current_time - forecast_data['last_fetch'] > timedelta(minutes=5)
+    # 檢查預報數據是否超過3分鐘
+    forecast_expired = current_time - forecast_data['last_fetch'] > timedelta(minutes=3)
     
-    # 檢查警特報數據是否超過5分鐘
-    alert_expired = current_time - alert_data['last_fetch'] > timedelta(minutes=5)
+    # 檢查警特報數據是否超過3分鐘
+    alert_expired = current_time - alert_data['last_fetch'] > timedelta(minutes=3)
     
     # 任一個過期就需要更新
     return aqi_expired or forecast_expired or alert_expired
@@ -854,7 +854,7 @@ HTML_TEMPLATE = """
             }
         }
         
-        setInterval(updateData, 300000);  // 每5分鐘更新一次
+        setInterval(updateData, 180000);  // 每3分鐘更新一次
         setTimeout(updateData, 10000);    // 10秒後首次自動更新
     </script>
 </head>
@@ -1083,7 +1083,7 @@ HTML_TEMPLATE = """
                 {% if data.publish_time != 'N/A' %}
                 <div style="margin-top: 5px;">📊 環境部發布時間：<span data-publish-time>{{ data.publish_time }}</span></div>
                 {% endif %}
-                <div class="refresh-note">⏱️ 資料每5分鐘自動更新</div>
+                <div class="refresh-note">⏱️ 資料每3分鐘自動更新</div>
             </div>
             {% else %}
             <div class="error-message">
