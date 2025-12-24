@@ -616,7 +616,7 @@ HTML_TEMPLATE = """
             border-radius: 5px;
             white-space: nowrap;
         }
-        .data-change.up { color: #c0392b; background: rgba(192, 57, 43, 0.2); }
+        .data-change.up { color: #c0392b; background: rgba(192, 57, 43, 0.2); font-weight: 900; border: 1px solid rgba(192, 57, 43, 0.3); }
         .data-change.down { color: #27ae60; background: rgba(39, 174, 96, 0.2); }
         .data-change.same { color: #95a5a6; background: rgba(149, 165, 166, 0.2); }
         .data-unit { font-size: 0.8em; opacity: 0.8; }
@@ -728,7 +728,7 @@ HTML_TEMPLATE = """
                             updateChange('[data-pm10-change]', data.aqi_data.pm10_change);
                             updateChange('[data-o3-change]', data.aqi_data.o3_change);
                             
-                            // 更新背景顏色 - 新增功能！
+                            // 更新背景顏色
                             updateCardColor('[data-aqi]', data.aqi_data.aqi_color);
                             updateCardColor('[data-pm25-avg]', data.aqi_data.pm25_avg_color);
                             updateCardColor('[data-pm10-avg]', data.aqi_data.pm10_avg_color);
@@ -736,7 +736,7 @@ HTML_TEMPLATE = """
                             updateCardColor('[data-pm10]', data.aqi_data.pm10_color);
                             updateCardColor('[data-o3]', data.aqi_data.o3_color);
                             
-                            // 更新狀態標籤 - 新增功能！
+                            // 更新狀態標籤
                             updateStatus('[data-aqi]', data.aqi_data.aqi_label);
                             updateStatus('[data-pm25-avg]', data.aqi_data.pm25_avg_label);
                             updateStatus('[data-pm10-avg]', data.aqi_data.pm10_avg_label);
@@ -758,14 +758,16 @@ HTML_TEMPLATE = """
                             updateElement('[data-forecast-weather]', data.forecast_data.weather_desc);
                             updateElement('[data-forecast-pop]', data.forecast_data.pop);
                             updateElement('[data-forecast-time]', data.forecast_data.forecast_time);
+
+                            // ★★★ 新增這行：修復舒適度背景顏色即時更新 ★★★
+                            updateWeatherItemColor('[data-forecast-comfort-desc]', data.forecast_data.comfort_color);
                         }
                         
-                        // 更新警特報（動態更新 DOM）
+                        // 更新警特報
                         if (data.alert_data) {
                             const alertContainer = document.getElementById('alert-container');
                             if (alertContainer) {
                                 if (data.alert_data.has_alert && data.alert_data.alerts.length > 0) {
-                                    // 有警報：動態生成警報 HTML
                                     let alertsHTML = '';
                                     data.alert_data.alerts.forEach(alert => {
                                         alertsHTML += `
@@ -781,7 +783,6 @@ HTML_TEMPLATE = """
                                     alertContainer.innerHTML = alertsHTML;
                                     alertContainer.style.display = 'block';
                                 } else {
-                                    // 無警報：清空並隱藏
                                     alertContainer.innerHTML = '';
                                     alertContainer.style.display = 'none';
                                 }
@@ -821,31 +822,38 @@ HTML_TEMPLATE = """
             }
         }
         
-        // 新增函數：更新卡片背景顏色
         function updateCardColor(selector, colorClass) {
             const el = document.querySelector(selector);
             if (el) {
-                // 找到父層的 data-card
                 const card = el.closest('.data-card');
                 if (card) {
-                    // 移除所有顏色 class
                     card.classList.remove('green', 'yellow', 'orange', 'red', 'gray');
-                    // 加上新的顏色 class
                     if (colorClass) {
                         card.classList.add(colorClass);
                     }
                 }
             }
         }
+
+        // ★★★ 新增這段：更新天氣項目(如舒適度)的背景顏色 ★★★
+        function updateWeatherItemColor(selector, colorClass) {
+            const el = document.querySelector(selector);
+            if (el) {
+                const item = el.closest('.weather-item');
+                if (item) {
+                    item.classList.remove('green', 'yellow', 'orange', 'red', 'blue', 'gray');
+                    if (colorClass) {
+                        item.classList.add(colorClass);
+                    }
+                }
+            }
+        }
         
-        // 新增函數：更新狀態標籤文字
         function updateStatus(selector, statusText) {
             const el = document.querySelector(selector);
             if (el) {
-                // 找到父層的 data-card
                 const card = el.closest('.data-card');
                 if (card) {
-                    // 找到 .data-status 元素
                     const statusEl = card.querySelector('.data-status');
                     if (statusEl && statusText) {
                         statusEl.textContent = statusText;
@@ -1151,3 +1159,4 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
