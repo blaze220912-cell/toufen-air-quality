@@ -304,21 +304,20 @@ if hourly_response.status_code == 200:
         print(f"  ⚠️ 小時值 API 無數據")
     
     if len(hourly_records) > 0:
+        # 將垂直格式轉換為水平格式
+        # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
+        # 水平: {"2025-10-20 19:00": {"PM2.5": "10", "PM10": "25", ...}, ...}
+        grouped_data = {}
+        for record in hourly_records:
+            if record.get('sitename') == 'Toufen':
+                monitor_date = record.get('monitordate', '')
+                item_name = record.get('itemname', '')
+                concentration = record.get('concentration', 'N/A')
                 
-                # 將垂直格式轉換為水平格式
-                # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
-                # 水平: {"2025-10-20 19:00": {"PM2.5": "10", "PM10": "25", ...}, ...}
-                grouped_data = {}
-                for record in hourly_records:
-                    if record.get('sitename') == 'Toufen':
-                        monitor_date = record.get('monitordate', '')
-                        item_name = record.get('itemname', '')
-                        concentration = record.get('concentration', 'N/A')
-                        
-                        if monitor_date not in grouped_data:
-                            grouped_data[monitor_date] = {}
-                        
-                        grouped_data[monitor_date][item_name] = concentration
+                if monitor_date not in grouped_data:
+                    grouped_data[monitor_date] = {}
+                
+                grouped_data[monitor_date][item_name] = concentration
                 
                 # 排序取得最新兩個小時
                 sorted_dates = sorted(grouped_data.keys(), reverse=True)
@@ -1168,5 +1167,6 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
