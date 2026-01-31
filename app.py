@@ -289,35 +289,33 @@ def fetch_air_quality_data():
         hourly_response = requests.get(AQI_HOURLY_API_URL, timeout=10, verify=False)
         print(f"  → 小時值 API 狀態碼: {hourly_response.status_code}")
         
-previous_hour_data = None
-if hourly_response.status_code == 200:
-    hourly_data = hourly_response.json()
-    # 小時值 API 直接返回 list，不是 dict
-    if isinstance(hourly_data, list) and len(hourly_data) > 0:
-        hourly_records = hourly_data
-        print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
-    elif isinstance(hourly_data, dict) and hourly_data.get('records'):
-        hourly_records = hourly_data['records']
-        print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
-    else:
-        hourly_records = []
-        print(f"  ⚠️ 小時值 API 無數據")
-    
-    if len(hourly_records) > 0:
-        # 將垂直格式轉換為水平格式
-        # 垂直: [{"itemname": "PM2.5", "concentration": "10", "monitordate": "2025-10-20 19:00"}, ...]
-        # 水平: {"2025-10-20 19:00": {"PM2.5": "10", "PM10": "25", ...}, ...}
-        grouped_data = {}
-        for record in hourly_records:
-            if record.get('sitename') == 'Toufen':
-                monitor_date = record.get('monitordate', '')
-                item_name = record.get('itemname', '')
-                concentration = record.get('concentration', 'N/A')
-                
-                if monitor_date not in grouped_data:
-                    grouped_data[monitor_date] = {}
-                
-                grouped_data[monitor_date][item_name] = concentration
+        previous_hour_data = None
+        if hourly_response.status_code == 200:
+            hourly_data = hourly_response.json()
+            # 小時值 API 直接返回 list，不是 dict
+            if isinstance(hourly_data, list) and len(hourly_data) > 0:
+                hourly_records = hourly_data
+                print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
+            elif isinstance(hourly_data, dict) and hourly_data.get('records'):
+                hourly_records = hourly_data['records']
+                print(f"  ✓ 取得 {len(hourly_records)} 筆小時值數據")
+            else:
+                hourly_records = []
+                print(f"  ⚠️ 小時值 API 無數據")
+            
+            if len(hourly_records) > 0:
+                # 將垂直格式轉換為水平格式
+                grouped_data = {}
+                for record in hourly_records:
+                    if record.get('sitename') == 'Toufen':
+                        monitor_date = record.get('monitordate', '')
+                        item_name = record.get('itemname', '')
+                        concentration = record.get('concentration', 'N/A')
+                        
+                        if monitor_date not in grouped_data:
+                            grouped_data[monitor_date] = {}
+                        
+                        grouped_data[monitor_date][item_name] = concentration
                 
                 # 排序取得最新兩個小時
                 sorted_dates = sorted(grouped_data.keys(), reverse=True)
@@ -408,7 +406,7 @@ if hourly_response.status_code == 200:
             # 計算所有變化量
             if previous_hour_data:
                 print(f"  → 計算變化量（當前 vs 前一小時）")
-                aqi_change = None  # 小時值 API 沒有 AQI
+                aqi_change = None
                 pm25_avg_change = calculate_change(pm25_avg, previous_hour_data, 'pm2.5_avg')
                 pm10_avg_change = calculate_change(pm10_avg, previous_hour_data, 'pm10_avg')
                 pm10_change = calculate_change(pm10, previous_hour_data, 'pm10')
@@ -1167,6 +1165,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
