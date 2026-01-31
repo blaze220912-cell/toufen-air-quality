@@ -342,18 +342,17 @@ def fetch_air_quality_data():
         print(f"  → 即時 API 狀態碼: {response.status_code}")
         
         response.raise_for_status()
-data = response.json()
-
-# 即時觀測 API 也可能直接返回 list
-if isinstance(data, list) and len(data) > 0:
-    records = data
-elif isinstance(data, dict) and data.get('records'):
-    records = data['records']
-else:
-    records = []
-
-if len(records) > 0:
-            
+        data = response.json()
+        
+        # 即時觀測 API 也可能直接返回 list
+        if isinstance(data, list) and len(data) > 0:
+            records = data
+        elif isinstance(data, dict) and data.get('records'):
+            records = data['records']
+        else:
+            records = []
+        
+        if len(records) > 0:
             valid_records = [r for r in records if r.get('publishtime')]
             if valid_records:
                 valid_records.sort(key=lambda x: x.get('publishtime', ''), reverse=True)
@@ -1172,6 +1171,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
