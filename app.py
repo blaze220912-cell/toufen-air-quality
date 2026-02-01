@@ -45,6 +45,8 @@ AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?language=en&lim
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 WEATHER_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&locationName=苗栗縣"
 COLD_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-004?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&CountyName=苗栗縣&expires=true"
+HEAT_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-005?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&CountyName=苗栗縣&expires=true"
+TYPHOON_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&expires=true"
 
 def get_taipei_time():
     return datetime.now(TAIPEI_TZ)
@@ -212,85 +214,158 @@ def fetch_weather_alerts():
         
         alerts_list = []
         
-        # 1. 呼叫一般警特報 API (W-C0033-001)
-        response1 = requests.get(WEATHER_ALERT_API_URL, timeout=10)
-        print(f"一般警特報 API 狀態碼: {response1.status_code}")
-        
-        if response1.status_code == 200:
-            data1 = response1.json()
-            if data1.get('success') == 'true' and data1.get('records'):
-                locations = data1['records'].get('location', [])
-                
-                if len(locations) > 0:
-                    location = locations[0]
-                    hazard_conditions = location.get('hazardConditions', {})
-                    hazards = hazard_conditions.get('hazards', [])
+        # 1. 一般警特報 (W-C0033-001) - 強風、大雨等
+        try:
+            response1 = requests.get(WEATHER_ALERT_API_URL, timeout=10)
+            print(f"一般警特報 API 狀態碼: {response1.status_code}")
+            
+            if response1.status_code == 200:
+                data1 = response1.json()
+                if data1.get('success') == 'true' and data1.get('records'):
+                    locations = data1['records'].get('location', [])
                     
-                    for hazard in hazards:
-                        info = hazard.get('info', {})
-                        valid_time = hazard.get('validTime', {})
+                    if len(locations) > 0:
+                        location = locations[0]
+                        hazard_conditions = location.get('hazardConditions', {})
+                        hazards = hazard_conditions.get('hazards', [])
                         
-                        phenomena = info.get('phenomena', 'N/A')
-                        significance = info.get('significance', 'N/A')
-                        start_time = valid_time.get('startTime', 'N/A')
-                        end_time = valid_time.get('endTime', 'N/A')
-                        
-                        # 判斷警報顏色等級
-                        alert_color = 'orange'
-                        if '颱風' in phenomena:
-                            alert_color = 'red'
-                        elif '豪雨' in phenomena or '強風' in phenomena:
+                        for hazard in hazards:
+                            info = hazard.get('info', {})
+                            valid_time = hazard.get('validTime', {})
+                            
+                            phenomena = info.get('phenomena', 'N/A')
+                            significance = info.get('significance', 'N/A')
+                            start_time = valid_time.get('startTime', 'N/A')
+                            end_time = valid_time.get('endTime', 'N/A')
+                            
                             alert_color = 'orange'
-                        elif '大雨' in phenomena or '濃霧' in phenomena:
-                            alert_color = 'yellow'
-                        
-                        alerts_list.append({
-                            'phenomena': phenomena,
-                            'significance': significance,
-                            'start_time': start_time,
-                            'end_time': end_time,
-                            'color': alert_color
-                        })
-                        print(f"  ⚠️ 一般警特報：{phenomena}{significance}")
+                            if '豪雨' in phenomena:
+                                alert_color = 'red'
+                            elif '強風' in phenomena or '大雨' in phenomena:
+                                alert_color = 'orange'
+                            elif '濃霧' in phenomena:
+                                alert_color = 'yellow'
+                            
+                            alerts_list.append({
+                                'phenomena': phenomena,
+                                'significance': significance,
+                                'start_time': start_time,
+                                'end_time': end_time,
+                                'color': alert_color
+                            })
+                            print(f"  ⚠️ 一般警特報：{phenomena}{significance}")
+        except Exception as e:
+            print(f"  × 一般警特報 API 錯誤: {e}")
         
-        # 2. 呼叫低溫特報 API (W-C0033-004)
-        response2 = requests.get(COLD_ALERT_API_URL, timeout=10)
-        print(f"低溫特報 API 狀態碼: {response2.status_code}")
-        
-        if response2.status_code == 200:
-            data2 = response2.json()
-            if data2.get('success') == 'true' and data2.get('records'):
-                records = data2['records'].get('record', [])
-                
-                if len(records) > 0:
-                    for record in records:
-                        hazard_name = record.get('hazardName', 'N/A')
-                        title = record.get('title', 'N/A')
-                        issue_time = record.get('issueTime', 'N/A')
-                        expire_time = record.get('expireTime', 'N/A')
-                        
-                        # 低溫特報顏色判斷
-                        alert_color = 'blue'  # 低溫用藍色
-                        if '低溫' in hazard_name or '低溫' in title:
+        # 2. 低溫特報 (W-C0033-004)
+        try:
+            response2 = requests.get(COLD_ALERT_API_URL, timeout=10)
+            print(f"低溫特報 API 狀態碼: {response2.status_code}")
+            
+            if response2.status_code == 200:
+                data2 = response2.json()
+                if data2.get('success') == 'true' and data2.get('records'):
+                    records = data2['records'].get('record', [])
+                    
+                    if len(records) > 0:
+                        for record in records:
+                            hazard_name = record.get('hazardName', 'N/A')
+                            title = record.get('title', 'N/A')
+                            issue_time = record.get('issueTime', 'N/A')
+                            expire_time = record.get('expireTime', 'N/A')
+                            
+                            alert_color = 'blue'
                             if '橙色' in title or '嚴寒' in title:
                                 alert_color = 'orange'
                             elif '黃色' in title:
                                 alert_color = 'yellow'
-                            else:
-                                alert_color = 'blue'
-                        
-                        alerts_list.append({
-                            'phenomena': hazard_name,
-                            'significance': title,
-                            'start_time': issue_time,
-                            'end_time': expire_time,
-                            'color': alert_color
-                        })
-                        print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
-                else:
-                    print(f"  ✓ 目前無低溫特報")
+                            
+                            alerts_list.append({
+                                'phenomena': hazard_name,
+                                'significance': title,
+                                'start_time': issue_time,
+                                'end_time': expire_time,
+                                'color': alert_color
+                            })
+                            print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
+                    else:
+                        print(f"  ✓ 目前無低溫特報")
+        except Exception as e:
+            print(f"  × 低溫特報 API 錯誤: {e}")
         
-        # 3. 更新全域資料
+        # 3. 颱風警報 (W-C0034-001)
+        try:
+            response3 = requests.get(TYPHOON_ALERT_API_URL, timeout=10)
+            print(f"颱風警報 API 狀態碼: {response3.status_code}")
+            
+            if response3.status_code == 200:
+                data3 = response3.json()
+                if data3.get('success') == 'true' and data3.get('records'):
+                    records = data3['records'].get('record', [])
+                    
+                    if len(records) > 0:
+                        for record in records:
+                            hazard_name = record.get('hazardName', 'N/A')
+                            title = record.get('title', 'N/A')
+                            issue_time = record.get('issueTime', 'N/A')
+                            expire_time = record.get('expireTime', 'N/A')
+                            
+                            # 颱風警報用紅色（最高等級）
+                            alert_color = 'red'
+                            
+                            alerts_list.append({
+                                'phenomena': hazard_name,
+                                'significance': title,
+                                'start_time': issue_time,
+                                'end_time': expire_time,
+                                'color': alert_color
+                            })
+                            print(f"  🌀 颱風警報：{hazard_name} {title}")
+                    else:
+                        print(f"  ✓ 目前無颱風警報")
+        except Exception as e:
+            print(f"  × 颱風警報 API 錯誤: {e}")
+        
+        # 4. 高溫特報 (W-C0033-005)
+        try:
+            response4 = requests.get(HEAT_ALERT_API_URL, timeout=10)
+            print(f"高溫特報 API 狀態碼: {response4.status_code}")
+            
+            if response4.status_code == 200:
+                data4 = response4.json()
+                if data4.get('success') == 'true' and data4.get('records'):
+                    records = data4['records'].get('record', [])
+                    
+                    if len(records) > 0:
+                        for record in records:
+                            hazard_name = record.get('hazardName', 'N/A')
+                            title = record.get('title', 'N/A')
+                            issue_time = record.get('issueTime', 'N/A')
+                            expire_time = record.get('expireTime', 'N/A')
+                            
+                            # 高溫特報顏色判斷
+                            alert_color = 'orange'
+                            if '紅色' in title or '極端' in title:
+                                alert_color = 'red'
+                            elif '橙色' in title:
+                                alert_color = 'orange'
+                            elif '黃色' in title:
+                                alert_color = 'yellow'
+                            
+                            alerts_list.append({
+                                'phenomena': hazard_name,
+                                'significance': title,
+                                'start_time': issue_time,
+                                'end_time': expire_time,
+                                'color': alert_color
+                            })
+                            print(f"  🌡️ 高溫特報：{hazard_name} {title}")
+                    else:
+                        print(f"  ✓ 目前無高溫特報")
+        except Exception as e:
+            print(f"  × 高溫特報 API 錯誤: {e}")
+        
+        # 5. 更新全域資料
         if len(alerts_list) > 0:
             alert_data = {
                 'has_alert': True,
@@ -304,7 +379,7 @@ def fetch_weather_alerts():
                 'alerts': [],
                 'last_fetch': get_taipei_time()
             }
-            print(f"✓ 目前無天氣警特報")
+            print(f"✓ 目前無任何天氣警特報")
             
     except Exception as e:
         print(f"× 抓取警特報數據失敗: {e}")
@@ -1205,6 +1280,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
