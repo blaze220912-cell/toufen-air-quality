@@ -44,6 +44,7 @@ AQI_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_432?format=json&api_key=e0
 AQI_HOURLY_API_URL = "https://data.moenv.gov.tw/api/v2/aqx_p_213?language=en&limit=12&api_key=e0438a06-74df-4300-8ce5-edfcb08c82b8"
 FORECAST_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-013?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&LocationName=頭份市"
 WEATHER_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&locationName=苗栗縣"
+COLD_ALERT_API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-004?Authorization=CWA-BC6838CC-5D26-43CD-B524-8A522B534959&CountyName=苗栗縣&expires=true"
 
 def get_taipei_time():
     return datetime.now(TAIPEI_TZ)
@@ -208,22 +209,23 @@ def fetch_weather_alerts():
     global alert_data
     try:
         print(f"正在呼叫天氣警特報 API...")
-        response = requests.get(WEATHER_ALERT_API_URL, timeout=10)
-        print(f"警特報 API 狀態碼: {response.status_code}")
-        response.raise_for_status()
-        data = response.json()
         
-        if data.get('success') == 'true' and data.get('records'):
-            locations = data['records'].get('location', [])
-            
-            if len(locations) > 0:
-                location = locations[0]
-                hazard_conditions = location.get('hazardConditions', {})
-                hazards = hazard_conditions.get('hazards', [])
+        alerts_list = []
+        
+        # 1. 呼叫一般警特報 API (W-C0033-001)
+        response1 = requests.get(WEATHER_ALERT_API_URL, timeout=10)
+        print(f"一般警特報 API 狀態碼: {response1.status_code}")
+        
+        if response1.status_code == 200:
+            data1 = response1.json()
+            if data1.get('success') == 'true' and data1.get('records'):
+                locations = data1['records'].get('location', [])
                 
-                if len(hazards) > 0:
-                    # 有警報
-                    alerts_list = []
+                if len(locations) > 0:
+                    location = locations[0]
+                    hazard_conditions = location.get('hazardConditions', {})
+                    hazards = hazard_conditions.get('hazards', [])
+                    
                     for hazard in hazards:
                         info = hazard.get('info', {})
                         valid_time = hazard.get('validTime', {})
@@ -234,7 +236,7 @@ def fetch_weather_alerts():
                         end_time = valid_time.get('endTime', 'N/A')
                         
                         # 判斷警報顏色等級
-                        alert_color = 'orange'  # 預設橙色
+                        alert_color = 'orange'
                         if '颱風' in phenomena:
                             alert_color = 'red'
                         elif '豪雨' in phenomena or '強風' in phenomena:
@@ -249,28 +251,60 @@ def fetch_weather_alerts():
                             'end_time': end_time,
                             'color': alert_color
                         })
-                    
-                    alert_data = {
-                        'has_alert': True,
-                        'alerts': alerts_list,
-                        'last_fetch': get_taipei_time()
-                    }
-                    
-                    print(f"✓ 警特報數據更新成功：{len(alerts_list)} 則警報")
-                    for alert in alerts_list:
-                        print(f"  ⚠️ {alert['phenomena']}{alert['significance']}")
+                        print(f"  ⚠️ 一般警特報：{phenomena}{significance}")
+        
+        # 2. 呼叫低溫特報 API (W-C0033-004)
+        response2 = requests.get(COLD_ALERT_API_URL, timeout=10)
+        print(f"低溫特報 API 狀態碼: {response2.status_code}")
+        
+        if response2.status_code == 200:
+            data2 = response2.json()
+            if data2.get('success') == 'true' and data2.get('records'):
+                records = data2['records'].get('record', [])
+                
+                if len(records) > 0:
+                    for record in records:
+                        hazard_name = record.get('hazardName', 'N/A')
+                        title = record.get('title', 'N/A')
+                        issue_time = record.get('issueTime', 'N/A')
+                        expire_time = record.get('expireTime', 'N/A')
+                        
+                        # 低溫特報顏色判斷
+                        alert_color = 'blue'  # 低溫用藍色
+                        if '低溫' in hazard_name or '低溫' in title:
+                            if '橙色' in title or '嚴寒' in title:
+                                alert_color = 'orange'
+                            elif '黃色' in title:
+                                alert_color = 'yellow'
+                            else:
+                                alert_color = 'blue'
+                        
+                        alerts_list.append({
+                            'phenomena': hazard_name,
+                            'significance': title,
+                            'start_time': issue_time,
+                            'end_time': expire_time,
+                            'color': alert_color
+                        })
+                        print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
                 else:
-                    # 無警報
-                    alert_data = {
-                        'has_alert': False,
-                        'alerts': [],
-                        'last_fetch': get_taipei_time()
-                    }
-                    print(f"✓ 目前無天氣警特報")
-            else:
-                alert_data['has_alert'] = False
+                    print(f"  ✓ 目前無低溫特報")
+        
+        # 3. 更新全域資料
+        if len(alerts_list) > 0:
+            alert_data = {
+                'has_alert': True,
+                'alerts': alerts_list,
+                'last_fetch': get_taipei_time()
+            }
+            print(f"✓ 警特報數據更新成功：共 {len(alerts_list)} 則警報")
         else:
-            alert_data['has_alert'] = False
+            alert_data = {
+                'has_alert': False,
+                'alerts': [],
+                'last_fetch': get_taipei_time()
+            }
+            print(f"✓ 目前無天氣警特報")
             
     except Exception as e:
         print(f"× 抓取警特報數據失敗: {e}")
@@ -1171,6 +1205,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
