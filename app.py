@@ -297,18 +297,28 @@ def fetch_weather_alerts():
         except Exception as e:
             print(f"  × 豪大雨特報 API 錯誤: {e}")
             
-        # 2. 低溫特報 (W-C0033-004)
+        # 3. 低溫特報 (W-C0033-004)
         try:
             response2 = requests.get(COLD_ALERT_API_URL, timeout=10)
             print(f"低溫特報 API 狀態碼: {response2.status_code}")
             
             if response2.status_code == 200:
                 data2 = response2.json()
+                print(f"  🔍 API success 欄位: {data2.get('success')}")
+                print(f"  🔍 API records 欄位: {data2.get('records')}")
+                
                 if data2.get('success') == 'true' and data2.get('records'):
                     records = data2['records'].get('record', [])
+                    print(f"  🔍 record 欄位找到: {len(records)} 筆")
+                    
+                    # 如果 record 是空的，看看 records 裡面還有什麼
+                    if len(records) == 0:
+                        print(f"  🔍 完整 records 內容: {data2['records']}")
                     
                     if len(records) > 0:
                         for record in records:
+                            print(f"  🔍 記錄內容: {record}")
+                            
                             hazard_name = record.get('hazardName', 'N/A')
                             title = record.get('title', 'N/A')
                             issue_time = record.get('issueTime', 'N/A')
@@ -330,8 +340,12 @@ def fetch_weather_alerts():
                             print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
                     else:
                         print(f"  ✓ 目前無低溫特報")
+                else:
+                    print(f"  ⚠️ API 回傳格式不符預期")
         except Exception as e:
             print(f"  × 低溫特報 API 錯誤: {e}")
+            import traceback
+            traceback.print_exc()
         
         # 3. 颱風警報 (W-C0034-001)
         try:
@@ -1320,6 +1334,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
