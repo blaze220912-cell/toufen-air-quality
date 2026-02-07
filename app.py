@@ -305,24 +305,25 @@ def fetch_weather_alerts():
             if response2.status_code == 200:
                 data2 = response2.json()
                 print(f"  🔍 API success 欄位: {data2.get('success')}")
-                print(f"  🔍 API records 欄位: {data2.get('records')}")
+                print(f"  🔍 API records 是否存在: {data2.get('records') is not None}")
                 
                 if data2.get('success') == 'true' and data2.get('records'):
                     records = data2['records'].get('record', [])
-                    print(f"  🔍 record 欄位找到: {len(records)} 筆")
+                    print(f"  🔍 找到 {len(records)} 筆 record")
                     
-                    # 如果 record 是空的，看看 records 裡面還有什麼
+                    # 如果找不到 record，看看 records 裡有什麼
                     if len(records) == 0:
-                        print(f"  🔍 完整 records 內容: {data2['records']}")
+                        print(f"  🔍 records 的所有 keys: {list(data2['records'].keys())}")
+                        print(f"  🔍 records 完整內容: {data2['records']}")
                     
                     if len(records) > 0:
                         for record in records:
-                            print(f"  🔍 記錄內容: {record}")
-                            
                             hazard_name = record.get('hazardName', 'N/A')
                             title = record.get('title', 'N/A')
                             issue_time = record.get('issueTime', 'N/A')
                             expire_time = record.get('expireTime', 'N/A')
+                            
+                            print(f"  🔍 記錄: {hazard_name} - {title}")
                             
                             alert_color = 'blue'
                             if '橙色' in title or '嚴寒' in title:
@@ -339,9 +340,9 @@ def fetch_weather_alerts():
                             })
                             print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
                     else:
-                        print(f"  ✓ 目前無低溫特報")
+                        print(f"  ✓ 目前無低溫特報（record 陣列為空）")
                 else:
-                    print(f"  ⚠️ API 回傳格式不符預期")
+                    print(f"  ⚠️ API 回傳不符預期（success={data2.get('success')}, records存在={data2.get('records') is not None}）")
         except Exception as e:
             print(f"  × 低溫特報 API 錯誤: {e}")
             import traceback
@@ -1334,6 +1335,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
