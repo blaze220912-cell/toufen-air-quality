@@ -265,33 +265,51 @@ def fetch_weather_alerts():
             
             if response_rain.status_code == 200:
                 data_rain = response_rain.json()
+                
                 if data_rain.get('success') == 'true' and data_rain.get('records'):
-                    records = data_rain['records'].get('record', [])
+                    info_list = data_rain['records'].get('info', [])
                     
-                    if len(records) > 0:
-                        for record in records:
-                            hazard_name = record.get('hazardName', 'N/A')
-                            title = record.get('title', 'N/A')
-                            issue_time = record.get('issueTime', 'N/A')
-                            expire_time = record.get('expireTime', 'N/A')
+                    if len(info_list) > 0:
+                        processed_alerts = set()
+                        
+                        for info in info_list:
+                            headline = info.get('headline', 'N/A')
+                            effective = info.get('effective', 'N/A')
+                            expires = info.get('expires', 'N/A')
                             
-                            # 豪大雨特報顏色判斷
                             alert_color = 'orange'
-                            if '豪雨' in hazard_name or '豪雨' in title or '紅色' in title:
-                                alert_color = 'red'
-                            elif '大雨' in hazard_name or '大雨' in title or '橙色' in title:
-                                alert_color = 'orange'
-                            elif '黃色' in title:
-                                alert_color = 'yellow'
+                            severity_level = '豪大雨特報'
                             
-                            alerts_list.append({
-                                'phenomena': hazard_name,
-                                'significance': title,
-                                'start_time': issue_time,
-                                'end_time': expire_time,
-                                'color': alert_color
-                            })
-                            print(f"  ⚠️ 豪大雨特報：{hazard_name} {title}")
+                            for param in info.get('parameter', []):
+                                if param.get('valueName') == 'alert_color':
+                                    color_value = param.get('value', '').lower()
+                                    if '紅' in color_value or 'red' in color_value:
+                                        alert_color = 'red'
+                                    elif '橙' in color_value or 'orange' in color_value:
+                                        alert_color = 'orange'
+                                    elif '黃' in color_value or 'yellow' in color_value:
+                                        alert_color = 'yellow'
+                                if param.get('valueName') == 'severity_level':
+                                    severity_level = param.get('value', '豪大雨特報')
+                            
+                            has_toufen = False
+                            for area in info.get('area', []):
+                                if '頭份' in area.get('areaDesc', '') or '苗栗' in area.get('areaDesc', ''):
+                                    has_toufen = True
+                                    break
+                            
+                            alert_key = f"{headline}_{severity_level}_{alert_color}"
+                            if has_toufen and alert_key not in processed_alerts:
+                                processed_alerts.add(alert_key)
+                                
+                                alerts_list.append({
+                                    'phenomena': headline,
+                                    'significance': severity_level,
+                                    'start_time': effective,
+                                    'end_time': expires,
+                                    'color': alert_color
+                                })
+                                print(f"  ⚠️ 豪大雨特報：{headline} - {severity_level}")
                     else:
                         print(f"  ✓ 目前無豪大雨特報")
         except Exception as e:
@@ -1357,6 +1375,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
