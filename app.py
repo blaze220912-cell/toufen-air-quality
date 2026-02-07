@@ -304,45 +304,67 @@ def fetch_weather_alerts():
             
             if response2.status_code == 200:
                 data2 = response2.json()
-                print(f"  🔍 API success 欄位: {data2.get('success')}")
-                print(f"  🔍 API records 是否存在: {data2.get('records') is not None}")
                 
                 if data2.get('success') == 'true' and data2.get('records'):
-                    records = data2['records'].get('record', [])
-                    print(f"  🔍 找到 {len(records)} 筆 record")
+                    # 注意：資料在 info 陣列，不是 record 陣列！
+                    info_list = data2['records'].get('info', [])
+                    print(f"  🔍 找到 {len(info_list)} 筆 info")
                     
-                    # 如果找不到 record，看看 records 裡有什麼
-                    if len(records) == 0:
-                        print(f"  🔍 records 的所有 keys: {list(data2['records'].keys())}")
-                        print(f"  🔍 records 完整內容: {data2['records']}")
-                    
-                    if len(records) > 0:
-                        for record in records:
-                            hazard_name = record.get('hazardName', 'N/A')
-                            title = record.get('title', 'N/A')
-                            issue_time = record.get('issueTime', 'N/A')
-                            expire_time = record.get('expireTime', 'N/A')
+                    if len(info_list) > 0:
+                        # 用 set 記錄已處理的警報，避免重複
+                        processed_alerts = set()
+                        
+                        for info in info_list:
+                            headline = info.get('headline', 'N/A')
+                            description = info.get('description', 'N/A')
+                            effective = info.get('effective', 'N/A')
+                            expires = info.get('expires', 'N/A')
                             
-                            print(f"  🔍 記錄: {hazard_name} - {title}")
-                            
+                            # 取得顏色等級
                             alert_color = 'blue'
-                            if '橙色' in title or '嚴寒' in title:
-                                alert_color = 'orange'
-                            elif '黃色' in title:
-                                alert_color = 'yellow'
+                            for param in info.get('parameter', []):
+                                if param.get('valueName') == 'alert_color':
+                                    color_value = param.get('value', '').lower()
+                                    if '橙' in color_value or 'orange' in color_value:
+                                        alert_color = 'orange'
+                                    elif '黃' in color_value or 'yellow' in color_value:
+                                        alert_color = 'yellow'
+                                    elif '紅' in color_value or 'red' in color_value:
+                                        alert_color = 'red'
+                                    break
                             
-                            alerts_list.append({
-                                'phenomena': hazard_name,
-                                'significance': title,
-                                'start_time': issue_time,
-                                'end_time': expire_time,
-                                'color': alert_color
-                            })
-                            print(f"  ⚠️ 低溫特報：{hazard_name} {title}")
+                            # 取得嚴重程度
+                            severity_level = '低溫特報'
+                            for param in info.get('parameter', []):
+                                if param.get('valueName') == 'severity_level':
+                                    severity_level = param.get('value', '低溫特報')
+                                    break
+                            
+                            # 檢查是否包含頭份市
+                            has_toufen = False
+                            for area in info.get('area', []):
+                                if '頭份' in area.get('areaDesc', ''):
+                                    has_toufen = True
+                                    break
+                            
+                            # 避免重複加入相同警報
+                            alert_key = f"{headline}_{severity_level}_{alert_color}"
+                            if has_toufen and alert_key not in processed_alerts:
+                                processed_alerts.add(alert_key)
+                                
+                                alerts_list.append({
+                                    'phenomena': headline,
+                                    'significance': severity_level,
+                                    'start_time': effective,
+                                    'end_time': expires,
+                                    'color': alert_color
+                                })
+                                print(f"  ⚠️ 低溫特報：{headline} - {severity_level} ({alert_color})")
+                        
+                        if len(processed_alerts) == 0:
+                            print(f"  ✓ 苗栗縣頭份市目前無低溫特報")
                     else:
-                        print(f"  ✓ 目前無低溫特報（record 陣列為空）")
-                else:
-                    print(f"  ⚠️ API 回傳不符預期（success={data2.get('success')}, records存在={data2.get('records') is not None}）")
+                        print(f"  ✓ 目前無低溫特報")
         except Exception as e:
             print(f"  × 低溫特報 API 錯誤: {e}")
             import traceback
@@ -1335,6 +1357,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
