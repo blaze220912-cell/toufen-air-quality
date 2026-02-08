@@ -284,11 +284,27 @@ def fetch_weather_alerts():
                     
                     if len(info_list) > 0:
                         processed_alerts = set()
+                        current_time = get_taipei_time()  # 取得當前時間
                         
                         for info in info_list:
                             headline = info.get('headline', 'N/A')
                             effective = info.get('effective', 'N/A')
                             expires = info.get('expires', 'N/A')
+                            
+                            # 過濾已解除的警報（標題包含「解除」）
+                            if '解除' in headline:
+                                print(f"  ℹ️ 略過已解除的警報：{headline}")
+                                continue
+                            
+                            # 檢查是否已過期
+                            try:
+                                expire_dt = datetime.fromisoformat(expires.replace('+08:00', ''))
+                                expire_dt = expire_dt.replace(tzinfo=TAIPEI_TZ)
+                                if current_time > expire_dt:
+                                    print(f"  ℹ️ 略過已過期的警報：{headline}")
+                                    continue
+                            except:
+                                pass
                             
                             alert_color = 'orange'
                             severity_level = '豪大雨特報'
@@ -318,8 +334,8 @@ def fetch_weather_alerts():
                                 alerts_list.append({
                                     'phenomena': headline,
                                     'significance': severity_level,
-                                    'start_time': effective,
-                                    'end_time': expires,
+                                    'start_time': format_time(effective),
+                                    'end_time': format_time(expires),
                                     'color': alert_color
                                 })
                                 print(f"  ⚠️ 豪大雨特報：{headline} - {severity_level}")
@@ -327,6 +343,8 @@ def fetch_weather_alerts():
                         print(f"  ✓ 目前無豪大雨特報")
         except Exception as e:
             print(f"  × 豪大雨特報 API 錯誤: {e}")
+            import traceback
+            traceback.print_exc()
             
         # 3. 低溫特報 (W-C0033-004)
         try:
@@ -342,14 +360,29 @@ def fetch_weather_alerts():
                     print(f"  🔍 找到 {len(info_list)} 筆 info")
                     
                     if len(info_list) > 0:
-                        # 用 set 記錄已處理的警報，避免重複
                         processed_alerts = set()
+                        current_time = get_taipei_time()  # 取得當前時間
                         
                         for info in info_list:
                             headline = info.get('headline', 'N/A')
                             description = info.get('description', 'N/A')
                             effective = info.get('effective', 'N/A')
                             expires = info.get('expires', 'N/A')
+                            
+                            # 過濾已解除的警報
+                            if '解除' in headline:
+                                print(f"  ℹ️ 略過已解除的警報：{headline}")
+                                continue
+                            
+                            # 檢查是否已過期
+                            try:
+                                expire_dt = datetime.fromisoformat(expires.replace('+08:00', ''))
+                                expire_dt = expire_dt.replace(tzinfo=TAIPEI_TZ)
+                                if current_time > expire_dt:
+                                    print(f"  ℹ️ 略過已過期的警報：{headline}")
+                                    continue
+                            except:
+                                pass
                             
                             # 取得顏色等級
                             alert_color = 'blue'
@@ -386,8 +419,8 @@ def fetch_weather_alerts():
                                 alerts_list.append({
                                     'phenomena': headline,
                                     'significance': severity_level,
-                                    'start_time': format_time(effective),  # ← 加入轉換
-                                    'end_time': format_time(expires),      # ← 加入轉換
+                                    'start_time': format_time(effective),
+                                    'end_time': format_time(expires),
                                     'color': alert_color
                                 })
                                 print(f"  ⚠️ 低溫特報：{headline} - {severity_level} ({alert_color})")
@@ -449,12 +482,28 @@ def fetch_weather_alerts():
                     
                     if len(info_list) > 0:
                         processed_alerts = set()
+                        current_time = get_taipei_time()  # 取得當前時間
                         
                         for info in info_list:
                             headline = info.get('headline', 'N/A')
                             description = info.get('description', 'N/A')
                             effective = info.get('effective', 'N/A')
                             expires = info.get('expires', 'N/A')
+                            
+                            # 過濾已解除的警報
+                            if '解除' in headline:
+                                print(f"  ℹ️ 略過已解除的警報：{headline}")
+                                continue
+                            
+                            # 檢查是否已過期
+                            try:
+                                expire_dt = datetime.fromisoformat(expires.replace('+08:00', ''))
+                                expire_dt = expire_dt.replace(tzinfo=TAIPEI_TZ)
+                                if current_time > expire_dt:
+                                    print(f"  ℹ️ 略過已過期的警報：{headline}")
+                                    continue
+                            except:
+                                pass
                             
                             # 取得顏色等級
                             alert_color = 'orange'
@@ -492,8 +541,8 @@ def fetch_weather_alerts():
                                 alerts_list.append({
                                     'phenomena': headline,
                                     'significance': severity_level,
-                                    'start_time': format_time(effective),  # ← 加入轉換
-                                    'end_time': format_time(expires),      # ← 加入轉換
+                                    'start_time': format_time(effective),
+                                    'end_time': format_time(expires),
                                     'color': alert_color
                                 })
                                 print(f"  🌡️ 高溫特報：{headline} - {severity_level} ({alert_color})")
@@ -1422,6 +1471,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
