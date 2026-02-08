@@ -421,44 +421,78 @@ def fetch_weather_alerts():
         except Exception as e:
             print(f"  × 颱風警報 API 錯誤: {e}")
         
-        # 4. 高溫特報 (W-C0033-005)
+        # 5. 高溫特報 (W-C0033-005)
         try:
             response4 = requests.get(HEAT_ALERT_API_URL, timeout=10)
             print(f"高溫特報 API 狀態碼: {response4.status_code}")
             
             if response4.status_code == 200:
                 data4 = response4.json()
+                
                 if data4.get('success') == 'true' and data4.get('records'):
-                    records = data4['records'].get('record', [])
+                    # 注意：資料在 info 陣列，不是 record 陣列！
+                    info_list = data4['records'].get('info', [])
+                    print(f"  🔍 找到 {len(info_list)} 筆 info")
                     
-                    if len(records) > 0:
-                        for record in records:
-                            hazard_name = record.get('hazardName', 'N/A')
-                            title = record.get('title', 'N/A')
-                            issue_time = record.get('issueTime', 'N/A')
-                            expire_time = record.get('expireTime', 'N/A')
+                    if len(info_list) > 0:
+                        processed_alerts = set()
+                        
+                        for info in info_list:
+                            headline = info.get('headline', 'N/A')
+                            description = info.get('description', 'N/A')
+                            effective = info.get('effective', 'N/A')
+                            expires = info.get('expires', 'N/A')
                             
-                            # 高溫特報顏色判斷
+                            # 取得顏色等級
                             alert_color = 'orange'
-                            if '紅色' in title or '極端' in title:
-                                alert_color = 'red'
-                            elif '橙色' in title:
-                                alert_color = 'orange'
-                            elif '黃色' in title:
-                                alert_color = 'yellow'
+                            for param in info.get('parameter', []):
+                                if param.get('valueName') == 'alert_color':
+                                    color_value = param.get('value', '').lower()
+                                    if '紅' in color_value or 'red' in color_value:
+                                        alert_color = 'red'
+                                    elif '橙' in color_value or 'orange' in color_value:
+                                        alert_color = 'orange'
+                                    elif '黃' in color_value or 'yellow' in color_value:
+                                        alert_color = 'yellow'
+                                    break
                             
-                            alerts_list.append({
-                                'phenomena': hazard_name,
-                                'significance': title,
-                                'start_time': issue_time,
-                                'end_time': expire_time,
-                                'color': alert_color
-                            })
-                            print(f"  🌡️ 高溫特報：{hazard_name} {title}")
+                            # 取得嚴重程度
+                            severity_level = '高溫特報'
+                            for param in info.get('parameter', []):
+                                if param.get('valueName') == 'severity_level':
+                                    severity_level = param.get('value', '高溫特報')
+                                    break
+                            
+                            # 檢查是否包含頭份市或苗栗縣
+                            has_toufen = False
+                            for area in info.get('area', []):
+                                area_desc = area.get('areaDesc', '')
+                                if '頭份' in area_desc or '苗栗' in area_desc:
+                                    has_toufen = True
+                                    break
+                            
+                            # 避免重複加入相同警報
+                            alert_key = f"{headline}_{severity_level}_{alert_color}"
+                            if has_toufen and alert_key not in processed_alerts:
+                                processed_alerts.add(alert_key)
+                                
+                                alerts_list.append({
+                                    'phenomena': headline,
+                                    'significance': severity_level,
+                                    'start_time': effective,
+                                    'end_time': expires,
+                                    'color': alert_color
+                                })
+                                print(f"  🌡️ 高溫特報：{headline} - {severity_level} ({alert_color})")
+                        
+                        if len(processed_alerts) == 0:
+                            print(f"  ✓ 苗栗縣頭份市目前無高溫特報")
                     else:
                         print(f"  ✓ 目前無高溫特報")
         except Exception as e:
             print(f"  × 高溫特報 API 錯誤: {e}")
+            import traceback
+            traceback.print_exc()
         
         # 5. 更新全域資料
         if len(alerts_list) > 0:
@@ -1375,6 +1409,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
