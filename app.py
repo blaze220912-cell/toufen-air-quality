@@ -215,6 +215,19 @@ def fetch_weather_alerts():
         
         alerts_list = []
         
+        # 時間格式化函數
+        def format_time(time_str):
+            """將 ISO 時間格式轉換為易讀格式"""
+            if time_str == 'N/A' or not time_str:
+                return 'N/A'
+            try:
+                # 解析 ISO 8601 格式
+                dt = datetime.fromisoformat(time_str.replace('+08:00', ''))
+                # 轉換為 "月/日 時:分" 格式
+                return dt.strftime('%m/%d %H:%M')
+            except:
+                return time_str
+        
         # 1. 一般警特報 (W-C0033-001) - 強風、大雨等
         try:
             response1 = requests.get(WEATHER_ALERT_API_URL, timeout=10)
@@ -250,8 +263,8 @@ def fetch_weather_alerts():
                             alerts_list.append({
                                 'phenomena': phenomena,
                                 'significance': significance,
-                                'start_time': start_time,
-                                'end_time': end_time,
+                                'start_time': format_time(start_time),  # ← 加入轉換
+                                'end_time': format_time(end_time),      # ← 加入轉換
                                 'color': alert_color
                             })
                             print(f"  ⚠️ 一般警特報：{phenomena}{significance}")
@@ -373,8 +386,8 @@ def fetch_weather_alerts():
                                 alerts_list.append({
                                     'phenomena': headline,
                                     'significance': severity_level,
-                                    'start_time': effective,
-                                    'end_time': expires,
+                                    'start_time': format_time(effective),  # ← 加入轉換
+                                    'end_time': format_time(expires),      # ← 加入轉換
                                     'color': alert_color
                                 })
                                 print(f"  ⚠️ 低溫特報：{headline} - {severity_level} ({alert_color})")
@@ -411,8 +424,8 @@ def fetch_weather_alerts():
                             alerts_list.append({
                                 'phenomena': hazard_name,
                                 'significance': title,
-                                'start_time': issue_time,
-                                'end_time': expire_time,
+                                'start_time': format_time(start_time),  # ← 加入轉換
+                                'end_time': format_time(end_time),      # ← 加入轉換
                                 'color': alert_color
                             })
                             print(f"  🌀 颱風警報：{hazard_name} {title}")
@@ -479,8 +492,8 @@ def fetch_weather_alerts():
                                 alerts_list.append({
                                     'phenomena': headline,
                                     'significance': severity_level,
-                                    'start_time': effective,
-                                    'end_time': expires,
+                                    'start_time': format_time(effective),  # ← 加入轉換
+                                    'end_time': format_time(expires),      # ← 加入轉換
                                     'color': alert_color
                                 })
                                 print(f"  🌡️ 高溫特報：{headline} - {severity_level} ({alert_color})")
@@ -1409,6 +1422,7 @@ fetch_weather_alerts()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
