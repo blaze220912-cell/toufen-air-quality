@@ -75,7 +75,7 @@ def get_alert_visual(phenomena, significance, color):
     if '颱風' in text:
         icon = '🌀'
     elif '超大豪雨' in text or '大豪雨' in text:
-        icon = '🌊'
+        icon = '🌧️'
     elif '豪雨' in text:
         icon = '🌧️'
     elif '大雨' in text:
@@ -1061,38 +1061,38 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .weather-alert.alert-red.severe {
-            animation: breatheRed 1.5s ease-in-out infinite;
+            animation: breatheRed 2.5s ease-in-out infinite;
         }
         .weather-alert.alert-orange.severe {
-            animation: breatheOrange 1.7s ease-in-out infinite;
+            animation: breatheOrange 2.5s ease-in-out infinite;
         }
         @keyframes breatheRed {
             0%, 100% {
-                box-shadow: 0 0 6px 2px rgba(232, 65, 24, 0.45), 0 4px 12px rgba(0, 0, 0, 0.15);
+                box-shadow: 0 0 5px 1px rgba(232, 65, 24, 0.3), 0 4px 12px rgba(0, 0, 0, 0.15);
                 filter: brightness(1);
             }
             50% {
-                box-shadow: 0 0 32px 14px rgba(232, 65, 24, 0.9), 0 4px 12px rgba(0, 0, 0, 0.15);
-                filter: brightness(1.15);
+                box-shadow: 0 0 20px 7px rgba(232, 65, 24, 0.55), 0 4px 12px rgba(0, 0, 0, 0.15);
+                filter: brightness(1.07);
             }
         }
         @keyframes breatheOrange {
             0%, 100% {
-                box-shadow: 0 0 6px 2px rgba(255, 99, 72, 0.4), 0 4px 12px rgba(0, 0, 0, 0.15);
+                box-shadow: 0 0 5px 1px rgba(255, 99, 72, 0.28), 0 4px 12px rgba(0, 0, 0, 0.15);
                 filter: brightness(1);
             }
             50% {
-                box-shadow: 0 0 26px 11px rgba(255, 99, 72, 0.85), 0 4px 12px rgba(0, 0, 0, 0.15);
-                filter: brightness(1.12);
+                box-shadow: 0 0 17px 6px rgba(255, 99, 72, 0.5), 0 4px 12px rgba(0, 0, 0, 0.15);
+                filter: brightness(1.06);
             }
         }
         .weather-alert.severe .alert-icon {
             font-size: 2.6em;
-            animation: iconBreathe 1.5s ease-in-out infinite;
+            animation: iconBreathe 2.5s ease-in-out infinite;
         }
         @keyframes iconBreathe {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.22); }
+            50% { transform: scale(1.12); }
         }
         .weather-alert.severe .alert-title {
             font-size: 1.35em;
@@ -1109,7 +1109,7 @@ HTML_TEMPLATE = """
             margin-left: 10px;
             letter-spacing: 3px;
             vertical-align: middle;
-            animation: badgeBlink 1.5s ease-in-out infinite;
+            animation: badgeBlink 2.5s ease-in-out infinite;
         }
         @keyframes badgeBlink {
             0%, 100% { opacity: 1; }
@@ -1122,7 +1122,7 @@ HTML_TEMPLATE = """
                 animation: none !important;
             }
             .weather-alert.severe {
-                box-shadow: 0 0 20px 8px rgba(232, 65, 24, 0.6);
+                box-shadow: 0 0 14px 5px rgba(232, 65, 24, 0.4);
             }
         }
 
@@ -1208,6 +1208,7 @@ HTML_TEMPLATE = """
                                     });
                                     alertContainer.innerHTML = alertsHTML;
                                     alertContainer.style.display = 'block';
+                                    syncAlertAnimations();
                                 } else {
                                     alertContainer.innerHTML = '';
                                     alertContainer.style.display = 'none';
@@ -1223,6 +1224,17 @@ HTML_TEMPLATE = """
                 .catch(error => {
                     console.error('× 更新失敗:', error);
                 });
+        }
+
+        // 讓所有警報的呼吸燈/圖示/徽章從同一個時間原點開始,達成完全同步閃爍
+        function syncAlertAnimations() {
+            const targets = document.querySelectorAll(
+                '.weather-alert.severe, .weather-alert.severe .alert-icon, .alert-badge'
+            );
+            // 先清掉動畫觸發 reflow,再一次性恢復 → 所有元素在同一影格重新起算
+            targets.forEach(el => { el.style.animation = 'none'; });
+            void document.body.offsetWidth; // 強制 reflow
+            targets.forEach(el => { el.style.animation = ''; });
         }
 
         function updateElement(selector, value) {
@@ -1287,6 +1299,9 @@ HTML_TEMPLATE = """
                 }
             }
         }
+
+        // 頁面載入時,先讓伺服器端已渲染的警報動畫同步一次
+        window.addEventListener('load', syncAlertAnimations);
 
         setInterval(updateData, 180000);  // 每3分鐘更新一次
         setTimeout(updateData, 10000);    // 10秒後首次自動更新
