@@ -1680,7 +1680,7 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // ★ 12小時 PM2.5 / PM10 趨勢圖(純 SVG,暗色霓虹風格) ★
+        // ★ 12小時 PM2.5 / PM10 趨勢圖(純 SVG + K線圖式十字游標) ★
         function drawTrend(trend) {
             const box = document.getElementById('trend-chart');
             if (!box) return;
@@ -1722,7 +1722,7 @@ HTML_TEMPLATE = """
                 pts.forEach((t, i) => {
                     const v = t[key];
                     if (v === null || v === undefined) return;
-                    s += `<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="3.2" fill="${color}"><title>${t.time} ${key.toUpperCase()}: ${v}</title></circle>`;
+                    s += `<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="3.2" fill="${color}"/>`;
                 });
                 return s;
             }
@@ -1760,8 +1760,85 @@ HTML_TEMPLATE = """
                     ${buildDots('pm10', '#ffd166')}
                     ${buildDots('pm25', '#ff4d6d')}
                     ${xLabels}
+                    <!-- 十字游標層(K線圖式):垂直虛線 + 高亮點 + 數值浮框 -->
+                    <line class="x-line" y1="${padT}" y2="${padT + plotH}" stroke="rgba(0,229,255,0.6)" stroke-width="1" stroke-dasharray="5 4" visibility="hidden"/>
+                    <circle class="x-hl25" r="5.5" fill="#ff4d6d" stroke="#e6eefa" stroke-width="1.5" visibility="hidden"/>
+                    <circle class="x-hl10" r="5.5" fill="#ffd166" stroke="#e6eefa" stroke-width="1.5" visibility="hidden"/>
+                    <g class="x-tt" visibility="hidden">
+                        <rect width="118" height="66" rx="6" fill="rgba(7,12,24,0.94)" stroke="rgba(0,229,255,0.45)" stroke-width="1"/>
+                        <text class="x-tt-time" x="10" y="19" font-size="12" fill="#8fa1ba" letter-spacing="1"></text>
+                        <text class="x-tt-25" x="10" y="38" font-size="13" fill="#ff4d6d" font-weight="700"></text>
+                        <text class="x-tt-10" x="10" y="56" font-size="13" fill="#ffd166" font-weight="700"></text>
+                    </g>
+                    <rect class="x-hit" x="0" y="0" width="${W}" height="${H}" fill="transparent" style="cursor: crosshair; touch-action: none;"/>
                 </svg>
             `;
+
+            // ===== 十字游標互動邏輯 =====
+            const svg = box.querySelector('svg');
+            const elLine = svg.querySelector('.x-line');
+            const elHl25 = svg.querySelector('.x-hl25');
+            const elHl10 = svg.querySelector('.x-hl10');
+            const elTt   = svg.querySelector('.x-tt');
+            const elTtTime = svg.querySelector('.x-tt-time');
+            const elTt25 = svg.querySelector('.x-tt-25');
+            const elTt10 = svg.querySelector('.x-tt-10');
+            const elHit  = svg.querySelector('.x-hit');
+
+            // 將滑鼠/觸控座標換算為 viewBox 座標,吸附到最近的時間點
+            function nearestIndex(clientX) {
+                const r = svg.getBoundingClientRect();
+                const x = (clientX - r.left) / r.width * W;
+                let i = Math.round((x - padL) / plotW * (pts.length - 1));
+                return Math.max(0, Math.min(pts.length - 1, i));
+            }
+
+            function showCross(i) {
+                const cx = xPos(i);
+                const t = pts[i];
+
+                elLine.setAttribute('x1', cx);
+                elLine.setAttribute('x2', cx);
+                elLine.setAttribute('visibility', 'visible');
+
+                if (t.pm25 !== null && t.pm25 !== undefined) {
+                    elHl25.setAttribute('cx', cx);
+                    elHl25.setAttribute('cy', yPos(t.pm25));
+                    elHl25.setAttribute('visibility', 'visible');
+                } else {
+                    elHl25.setAttribute('visibility', 'hidden');
+                }
+                if (t.pm10 !== null && t.pm10 !== undefined) {
+                    elHl10.setAttribute('cx', cx);
+                    elHl10.setAttribute('cy', yPos(t.pm10));
+                    elHl10.setAttribute('visibility', 'visible');
+                } else {
+                    elHl10.setAttribute('visibility', 'hidden');
+                }
+
+                elTtTime.textContent = '⏱ ' + t.time;
+                elTt25.textContent = 'PM2.5  ' + (t.pm25 !== null && t.pm25 !== undefined ? t.pm25 : '—');
+                elTt10.textContent = 'PM10   ' + (t.pm10 !== null && t.pm10 !== undefined ? t.pm10 : '—');
+
+                // 浮框自動翻邊:靠右側時翻到虛線左邊,避免出界
+                const ttX = (cx + 130 > W - padR) ? cx - 128 : cx + 10;
+                elTt.setAttribute('transform', `translate(${ttX}, ${padT + 4})`);
+                elTt.setAttribute('visibility', 'visible');
+            }
+
+            function hideCross() {
+                elLine.setAttribute('visibility', 'hidden');
+                elHl25.setAttribute('visibility', 'hidden');
+                elHl10.setAttribute('visibility', 'hidden');
+                elTt.setAttribute('visibility', 'hidden');
+            }
+
+            elHit.addEventListener('mousemove', e => showCross(nearestIndex(e.clientX)));
+            elHit.addEventListener('mouseleave', hideCross);
+            // 觸控支援:手指按住滑動同樣顯示十字游標
+            elHit.addEventListener('touchstart', e => { showCross(nearestIndex(e.touches[0].clientX)); e.preventDefault(); }, { passive: false });
+            elHit.addEventListener('touchmove',  e => { showCross(nearestIndex(e.touches[0].clientX)); e.preventDefault(); }, { passive: false });
+            elHit.addEventListener('touchend', hideCross);
         }
 
         // 讓所有警報的呼吸燈/圖示/徽章從同一個時間原點開始,達成完全同步閃爍
@@ -2045,7 +2122,7 @@ HTML_TEMPLATE = """
                 <div class="trend-legend">
                     <span class="dot pm25"></span>PM2.5
                     <span class="dot pm10"></span>PM10
-                    <span style="margin-left:12px; color:rgba(143,161,186,0.6);">(μg/m³,滑鼠移到資料點可看數值)</span>
+                    <span style="margin-left:12px; color:rgba(143,161,186,0.6);">(μg/m³,滑鼠移入或手指滑動可查看各時點數值)</span>
                 </div>
                 <div id="trend-chart"><div class="trend-empty">趨勢圖載入中…</div></div>
             </div>
