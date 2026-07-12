@@ -973,31 +973,38 @@ HTML_TEMPLATE = """
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         /* ============================================================
-           設計系統(Mission Control HUD)
-           - 空品類別:感測模組卡(HUD角框+發光數值,狀態色由數據驅動)
-           - 天氣類別:數據列(青色框線,統一左側圖示格)
-           - 數字一律 Rajdhani,面板標題 Orbitron,狀態色全站統一
+           三層色彩架構(Mission Control HUD v2)
+           L1 類別底色:天氣列固定色相填色(溫度洋紅/體感琥珀/濕度紫/降雨藍/風青綠)
+           L2 狀態填色:空品卡整卡染色玻璃(綠/琥珀/橙/紅),色塊面積放大
+           L3 結構色:面板框/網格/雷達統一青色 HUD 語言
+           狀態變色僅限:空品六卡、舒適度、跑步指數 → 紅色全站只有一個意思
         ============================================================ */
         :root {
             --bg0: #070b14;
             --panel: rgba(13, 21, 40, 0.86);
             --panel-line: rgba(0, 229, 255, 0.22);
-            --tile: linear-gradient(180deg, rgba(19, 30, 56, 0.92), rgba(10, 17, 34, 0.92));
             --tile-line: rgba(122, 139, 163, 0.20);
             --cyan: #00e5ff;
-            --text: #dfe9f5;
-            --dim: #7a8ba3;
+            --text: #e6eefa;
+            --dim: #8fa1ba;
             --ok: #00ffa3;
             --warn: #ffd166;
             --alert: #ff9f43;
             --danger: #ff4d6d;
             --gray: #8b98ab;
+            /* L1 類別色相(天氣列固定色) */
+            --hue-temp: #ff6ec7;
+            --hue-feels: #ffb74d;
+            --hue-hum: #b388ff;
+            --hue-pop: #4da3ff;
+            --hue-wind: #2ee6c8;
             --num-font: 'Rajdhani', 'Microsoft JhengHei', sans-serif;
             --title-font: 'Orbitron', 'Microsoft JhengHei', sans-serif;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Rajdhani', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+            font-size: 17px;   /* ★ 全站基準字級放大 */
             color: var(--text);
             {% if bg_image %}
             background: linear-gradient(rgba(7,11,20,0.88), rgba(7,11,20,0.94)), url('/background') center center / cover no-repeat fixed;
@@ -1014,7 +1021,6 @@ HTML_TEMPLATE = """
             padding: 20px;
             position: relative;
         }
-        /* 全域科技網格底紋 */
         body::before {
             content: '';
             position: fixed;
@@ -1026,7 +1032,6 @@ HTML_TEMPLATE = """
             pointer-events: none;
             z-index: 0;
         }
-        /* 緩慢掃描線(訊號感) */
         body::after {
             content: '';
             position: fixed;
@@ -1046,13 +1051,13 @@ HTML_TEMPLATE = """
             max-width: 1400px;
             width: 100%;
             display: grid;
-            grid-template-columns: 360px 1fr;
+            grid-template-columns: 380px 1fr;
             gap: 20px;
             position: relative;
             z-index: 1;
         }
 
-        /* ===== 面板容器(兩大板塊共用外框語言) ===== */
+        /* ===== L3 結構層:面板容器(青色 HUD,兩板塊一致) ===== */
         .container, .weather-container {
             background: var(--panel);
             border: 1px solid var(--panel-line);
@@ -1063,7 +1068,6 @@ HTML_TEMPLATE = """
         }
         .container { padding: 34px; }
         .weather-container { padding: 26px; }
-        /* 面板頂部發光飾線 */
         .container::before, .weather-container::before {
             content: '';
             position: absolute;
@@ -1073,10 +1077,9 @@ HTML_TEMPLATE = """
             opacity: 0.6;
         }
 
-        /* ===== 面板標題系統(兩板塊一致) ===== */
         .panel-eyebrow {
             font-family: var(--title-font);
-            font-size: 0.62em;
+            font-size: 0.7em;
             letter-spacing: 4px;
             color: var(--cyan);
             text-transform: uppercase;
@@ -1086,7 +1089,7 @@ HTML_TEMPLATE = """
             margin-bottom: 8px;
         }
         .panel-eyebrow .live-dot {
-            width: 7px; height: 7px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: var(--ok);
             box-shadow: 0 0 8px var(--ok);
@@ -1097,7 +1100,7 @@ HTML_TEMPLATE = """
             50% { opacity: 0.35; }
         }
         h1, h2 {
-            font-size: 1.5em;
+            font-size: 1.7em;
             font-weight: 700;
             color: var(--text);
             display: flex;
@@ -1108,12 +1111,11 @@ HTML_TEMPLATE = """
         .site-info {
             color: var(--dim);
             margin-bottom: 22px;
-            font-size: 0.95em;
+            font-size: 1.05em;
             letter-spacing: 1px;
         }
 
-        /* 雷達掃描小圖示(招牌元素) */
-        .radar { width: 30px; height: 30px; flex: 0 0 auto; }
+        .radar { width: 32px; height: 32px; flex: 0 0 auto; }
         .radar circle { fill: none; stroke: rgba(0, 229, 255, 0.4); stroke-width: 1; }
         .radar .sweep {
             transform-origin: 15px 15px;
@@ -1122,95 +1124,127 @@ HTML_TEMPLATE = """
         @keyframes sweep { to { transform: rotate(360deg); } }
 
         /* ============================================================
-           類別 A:天氣預報板塊 —「數據列」設計語言
-           每列 = 左側圖示格 + 標籤 + 右側青色發光數值,樣式完全一致
+           L1 類別層:天氣預報 —「數據列」+ 固定類別色相填色
+           每列 = 專屬色相半透明漸層 + 同色框線 + 同色發光數值
+           (溫度 28°C 沒有好壞,故固定色不隨數值變;僅舒適度走狀態色)
         ============================================================ */
-        .weather-grid { display: grid; gap: 10px; }
+        .weather-grid { display: grid; gap: 11px; }
         .weather-item {
-            background: rgba(14, 23, 45, 0.72);
-            border: 1px solid var(--tile-line);
-            border-left: 3px solid var(--cyan);
-            border-radius: 8px;
-            padding: 12px 14px;
+            border-radius: 9px;
+            padding: 14px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: border-color 0.4s ease, background 0.4s ease;
+            border: 1px solid transparent;
+            transition: filter 0.3s ease;
         }
-        .weather-item:hover { background: rgba(18, 30, 58, 0.85); }
+        .weather-item:hover { filter: brightness(1.15); }
         .weather-label {
-            font-size: 0.88em;
-            color: var(--dim);
+            font-size: 1em;
+            color: rgba(230, 238, 250, 0.85);
             letter-spacing: 1px;
+            font-weight: 600;
         }
         .weather-value, .weather-value-large {
             font-family: var(--num-font);
             font-weight: 700;
-            color: var(--cyan);
-            text-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
         }
-        .weather-value { font-size: 1.45em; }
-        .weather-value-large { font-size: 1.9em; }
-        /* 舒適度為天氣板塊中唯一由「狀態色」驅動的列(左框+數值同步變色) */
-        .weather-item.comfort.green  { border-left-color: var(--ok); }
-        .weather-item.comfort.yellow { border-left-color: var(--warn); }
-        .weather-item.comfort.orange { border-left-color: var(--alert); }
-        .weather-item.comfort.red    { border-left-color: var(--danger); }
-        .weather-item.comfort.blue   { border-left-color: var(--cyan); }
-        .weather-item.comfort.gray   { border-left-color: var(--gray); }
-        .comfort-emoji { font-size: 2em; }
+        .weather-value { font-size: 1.75em; }
+        .weather-value-large { font-size: 2.3em; }
+
+        /* 類別色相定義:填色+框線+數值光,同列三處同色 */
+        .weather-item.temp {
+            background: linear-gradient(160deg, rgba(255, 110, 199, 0.22), rgba(58, 12, 42, 0.92));
+            border-color: rgba(255, 110, 199, 0.45);
+        }
+        .weather-item.temp .weather-value-large { color: var(--hue-temp); text-shadow: 0 0 14px rgba(255, 110, 199, 0.5); }
+
+        .weather-item.feels {
+            background: linear-gradient(160deg, rgba(255, 183, 77, 0.20), rgba(56, 34, 8, 0.92));
+            border-color: rgba(255, 183, 77, 0.45);
+        }
+        .weather-item.feels .weather-value { color: var(--hue-feels); text-shadow: 0 0 14px rgba(255, 183, 77, 0.5); }
+
+        .weather-item.humidity {
+            background: linear-gradient(160deg, rgba(179, 136, 255, 0.20), rgba(34, 18, 62, 0.92));
+            border-color: rgba(179, 136, 255, 0.45);
+        }
+        .weather-item.humidity .weather-value { color: var(--hue-hum); text-shadow: 0 0 14px rgba(179, 136, 255, 0.5); }
+
+        .weather-item.pop {
+            background: linear-gradient(160deg, rgba(77, 163, 255, 0.20), rgba(9, 30, 60, 0.92));
+            border-color: rgba(77, 163, 255, 0.45);
+        }
+        .weather-item.pop .weather-value { color: var(--hue-pop); text-shadow: 0 0 14px rgba(77, 163, 255, 0.5); }
+
+        .weather-item.wind {
+            background: linear-gradient(160deg, rgba(46, 230, 200, 0.18), rgba(6, 44, 38, 0.92));
+            border-color: rgba(46, 230, 200, 0.45);
+        }
+        .weather-item.wind .wind-value { color: var(--hue-wind); text-shadow: 0 0 12px rgba(46, 230, 200, 0.5); }
+
+        /* 舒適度:天氣板塊唯一的狀態色列(整塊染色玻璃,與空品同色系) */
+        .weather-item.comfort.green  { background: linear-gradient(160deg, rgba(0, 255, 163, 0.20), rgba(3, 46, 33, 0.92));   border-color: rgba(0, 255, 163, 0.5); }
+        .weather-item.comfort.yellow { background: linear-gradient(160deg, rgba(255, 209, 102, 0.20), rgba(58, 46, 8, 0.92)); border-color: rgba(255, 209, 102, 0.5); }
+        .weather-item.comfort.orange { background: linear-gradient(160deg, rgba(255, 159, 67, 0.24), rgba(62, 34, 6, 0.92));  border-color: rgba(255, 159, 67, 0.55); }
+        .weather-item.comfort.red    { background: linear-gradient(160deg, rgba(255, 77, 109, 0.26), rgba(66, 10, 22, 0.92)); border-color: rgba(255, 77, 109, 0.6); }
+        .weather-item.comfort.blue   { background: linear-gradient(160deg, rgba(0, 229, 255, 0.20), rgba(6, 34, 52, 0.92));   border-color: rgba(0, 229, 255, 0.5); }
+        .weather-item.comfort.gray   { background: linear-gradient(160deg, rgba(139, 152, 171, 0.15), rgba(24, 30, 42, 0.92));border-color: rgba(139, 152, 171, 0.4); }
+        .comfort-emoji { font-size: 2.4em; }
+        .comfort-desc-line { font-size: 1.05em; margin-top: 5px; color: var(--text); font-weight: 600; }
+
         .weather-desc-box {
-            background: linear-gradient(90deg, rgba(0, 229, 255, 0.10), rgba(0, 229, 255, 0.02));
-            border: 1px solid rgba(0, 229, 255, 0.25);
+            background: linear-gradient(90deg, rgba(0, 229, 255, 0.12), rgba(0, 229, 255, 0.03));
+            border: 1px solid rgba(0, 229, 255, 0.3);
             color: var(--text);
-            padding: 12px;
-            border-radius: 8px;
+            padding: 13px;
+            border-radius: 9px;
             text-align: center;
-            font-size: 1.1em;
-            font-weight: 600;
+            font-size: 1.25em;
+            font-weight: 700;
             letter-spacing: 2px;
             margin-bottom: 12px;
         }
         .forecast-time {
             text-align: center;
             color: var(--dim);
-            font-size: 0.85em;
+            font-size: 0.95em;
             margin-top: 14px;
-            padding: 9px;
+            padding: 10px;
             background: rgba(10, 17, 34, 0.7);
             border: 1px dashed rgba(122, 139, 163, 0.25);
             border-radius: 6px;
             letter-spacing: 1px;
         }
 
-        /* ===== 跑步適宜度:環形儀表(左板塊招牌) ===== */
+        /* ===== 跑步適宜度:環形儀表(狀態色) ===== */
         .run-card {
-            background: var(--tile);
             border: 1px solid var(--tile-line);
             border-radius: 10px;
             padding: 16px;
             margin-bottom: 18px;
             position: relative;
-            transition: border-color 0.5s ease;
+            transition: border-color 0.5s ease, background 0.5s ease;
+            background: linear-gradient(160deg, rgba(139, 152, 171, 0.10), rgba(20, 27, 42, 0.92));
         }
-        .run-card.green  { border-color: rgba(0, 255, 163, 0.45); }
-        .run-card.yellow { border-color: rgba(255, 209, 102, 0.45); }
-        .run-card.orange { border-color: rgba(255, 159, 67, 0.5); }
-        .run-card.red    { border-color: rgba(255, 77, 109, 0.55); }
+        .run-card.green  { background: linear-gradient(160deg, rgba(0, 255, 163, 0.16), rgba(3, 46, 33, 0.92));   border-color: rgba(0, 255, 163, 0.45); }
+        .run-card.yellow { background: linear-gradient(160deg, rgba(255, 209, 102, 0.16), rgba(58, 46, 8, 0.92)); border-color: rgba(255, 209, 102, 0.45); }
+        .run-card.orange { background: linear-gradient(160deg, rgba(255, 159, 67, 0.20), rgba(62, 34, 6, 0.92));  border-color: rgba(255, 159, 67, 0.5); }
+        .run-card.red    { background: linear-gradient(160deg, rgba(255, 77, 109, 0.22), rgba(66, 10, 22, 0.92)); border-color: rgba(255, 77, 109, 0.55); }
         .run-head {
             font-family: var(--title-font);
-            font-size: 0.6em;
+            font-size: 0.68em;
             letter-spacing: 3px;
-            color: var(--dim);
+            color: rgba(230, 238, 250, 0.7);
             text-transform: uppercase;
             margin-bottom: 10px;
         }
         .run-body { display: flex; align-items: center; gap: 16px; }
-        .run-gauge { position: relative; width: 108px; height: 108px; flex: 0 0 auto; }
+        .run-gauge { position: relative; width: 118px; height: 118px; flex: 0 0 auto; }
         .run-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
         .ring-bg {
             fill: none;
-            stroke: rgba(122, 139, 163, 0.18);
+            stroke: rgba(10, 16, 30, 0.55);
             stroke-width: 8;
         }
         .ring-fg {
@@ -1220,10 +1254,10 @@ HTML_TEMPLATE = """
             stroke-dasharray: 263.9;
             transition: stroke-dashoffset 0.9s ease, stroke 0.5s ease;
         }
-        .run-card.green  .ring-fg { stroke: var(--ok);     filter: drop-shadow(0 0 6px rgba(0,255,163,0.6)); }
-        .run-card.yellow .ring-fg { stroke: var(--warn);   filter: drop-shadow(0 0 6px rgba(255,209,102,0.6)); }
-        .run-card.orange .ring-fg { stroke: var(--alert);  filter: drop-shadow(0 0 6px rgba(255,159,67,0.6)); }
-        .run-card.red    .ring-fg { stroke: var(--danger); filter: drop-shadow(0 0 6px rgba(255,77,109,0.6)); }
+        .run-card.green  .ring-fg { stroke: var(--ok);     filter: drop-shadow(0 0 6px rgba(0,255,163,0.7)); }
+        .run-card.yellow .ring-fg { stroke: var(--warn);   filter: drop-shadow(0 0 6px rgba(255,209,102,0.7)); }
+        .run-card.orange .ring-fg { stroke: var(--alert);  filter: drop-shadow(0 0 6px rgba(255,159,67,0.7)); }
+        .run-card.red    .ring-fg { stroke: var(--danger); filter: drop-shadow(0 0 6px rgba(255,77,109,0.7)); }
         .run-card.gray   .ring-fg { stroke: var(--gray); }
         .run-score {
             position: absolute;
@@ -1232,76 +1266,95 @@ HTML_TEMPLATE = """
             align-items: center;
             justify-content: center;
             font-family: var(--num-font);
-            font-size: 2em;
+            font-size: 2.3em;
             font-weight: 700;
         }
-        .run-score small { font-size: 0.42em; color: var(--dim); font-weight: 500; margin-left: 2px; }
+        .run-score small { font-size: 0.4em; color: rgba(230, 238, 250, 0.6); font-weight: 500; margin-left: 2px; }
         .run-card.green  .run-score { color: var(--ok); }
         .run-card.yellow .run-score { color: var(--warn); }
         .run-card.orange .run-score { color: var(--alert); }
         .run-card.red    .run-score { color: var(--danger); }
         .run-info { flex: 1; }
-        .run-emoji { font-size: 1.9em; }
-        .run-level { font-size: 1.05em; font-weight: 700; margin-top: 4px; letter-spacing: 1px; }
+        .run-emoji { font-size: 2.2em; }
+        .run-level { font-size: 1.2em; font-weight: 700; margin-top: 4px; letter-spacing: 1px; }
         .run-reasons {
-            font-size: 0.8em;
+            font-size: 0.92em;
             margin-top: 10px;
-            color: var(--dim);
-            line-height: 1.55;
-            border-top: 1px dashed rgba(122, 139, 163, 0.25);
+            color: rgba(230, 238, 250, 0.75);
+            line-height: 1.6;
+            border-top: 1px dashed rgba(230, 238, 250, 0.2);
             padding-top: 8px;
         }
 
         /* ============================================================
-           類別 B:空氣品質板塊 —「感測模組」設計語言
-           每卡 = HUD 角框 + 頂部狀態條 + 發光大數值 + 狀態晶片
-           六張卡結構/字級/間距完全一致,只有狀態色隨數據變化
+           L2 狀態層:空氣品質 —「感測模組」整卡染色玻璃
+           六卡結構一致,整卡底色/框線/數值光/角框全由狀態色驅動
+           色塊面積放大 → AQI 惡化時整個板塊會「亮起來」
         ============================================================ */
         .data-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
         .data-card {
-            background: var(--tile);
-            border: 1px solid var(--tile-line);
             border-radius: 10px;
-            padding: 20px 16px 16px;
+            padding: 22px 16px 18px;
             text-align: center;
             position: relative;
-            transition: transform 0.3s ease, border-color 0.5s ease;
+            border: 1px solid var(--tile-line);
+            background: linear-gradient(165deg, rgba(139, 152, 171, 0.12), rgba(22, 28, 42, 0.94));
+            transition: transform 0.3s ease, background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
         }
         .data-card:hover { transform: translateY(-4px); }
-        /* HUD 角框(左上/右下) */
+        /* HUD 角框(左上/右下),顏色跟隨狀態 */
         .data-card::before, .data-card::after {
             content: '';
             position: absolute;
-            width: 14px; height: 14px;
-            border-color: rgba(0, 229, 255, 0.5);
+            width: 15px; height: 15px;
+            border-color: rgba(139, 152, 171, 0.5);
             border-style: solid;
             transition: border-color 0.5s ease;
         }
         .data-card::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 8px 0 0 0; }
         .data-card::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 8px 0; }
-        /* 頂部狀態條:狀態色的主要載體 */
-        .data-card { border-top: 2px solid var(--gray); }
-        .data-card.green  { border-top-color: var(--ok); }
-        .data-card.yellow { border-top-color: var(--warn); }
-        .data-card.orange { border-top-color: var(--alert); }
-        .data-card.red    { border-top-color: var(--danger); }
-        .data-card.red::before, .data-card.red::after { border-color: rgba(255, 77, 109, 0.7); }
+
+        /* 狀態染色:整卡玻璃填色 + 框線 + 內光暈 */
+        .data-card.green {
+            background: linear-gradient(165deg, rgba(0, 255, 163, 0.18), rgba(3, 46, 33, 0.94));
+            border-color: rgba(0, 255, 163, 0.5);
+            box-shadow: inset 0 0 30px rgba(0, 255, 163, 0.07);
+        }
+        .data-card.green::before, .data-card.green::after { border-color: rgba(0, 255, 163, 0.65); }
+        .data-card.yellow {
+            background: linear-gradient(165deg, rgba(255, 209, 102, 0.18), rgba(58, 46, 8, 0.94));
+            border-color: rgba(255, 209, 102, 0.5);
+            box-shadow: inset 0 0 30px rgba(255, 209, 102, 0.07);
+        }
+        .data-card.yellow::before, .data-card.yellow::after { border-color: rgba(255, 209, 102, 0.65); }
+        .data-card.orange {
+            background: linear-gradient(165deg, rgba(255, 159, 67, 0.22), rgba(62, 34, 6, 0.94));
+            border-color: rgba(255, 159, 67, 0.55);
+            box-shadow: inset 0 0 30px rgba(255, 159, 67, 0.09);
+        }
+        .data-card.orange::before, .data-card.orange::after { border-color: rgba(255, 159, 67, 0.7); }
+        .data-card.red {
+            background: linear-gradient(165deg, rgba(255, 77, 109, 0.24), rgba(66, 10, 22, 0.94));
+            border-color: rgba(255, 77, 109, 0.6);
+            box-shadow: inset 0 0 30px rgba(255, 77, 109, 0.12), 0 0 18px rgba(255, 77, 109, 0.15);
+        }
+        .data-card.red::before, .data-card.red::after { border-color: rgba(255, 77, 109, 0.8); }
 
         .data-label {
-            font-size: 0.78em;
-            color: var(--dim);
+            font-size: 0.92em;
+            color: rgba(230, 238, 250, 0.8);
             letter-spacing: 2px;
             margin-bottom: 10px;
-            text-transform: uppercase;
+            font-weight: 600;
         }
         .data-value {
             font-family: var(--num-font);
-            font-size: 2.5em;
+            font-size: 3em;   /* ★ 主數值放大 */
             font-weight: 700;
             margin-bottom: 4px;
             display: flex;
@@ -1311,38 +1364,39 @@ HTML_TEMPLATE = """
             line-height: 1;
             transition: color 0.5s ease, text-shadow 0.5s ease;
         }
-        .data-card.green  .data-value { color: var(--ok);     text-shadow: 0 0 16px rgba(0, 255, 163, 0.45); }
-        .data-card.yellow .data-value { color: var(--warn);   text-shadow: 0 0 16px rgba(255, 209, 102, 0.45); }
-        .data-card.orange .data-value { color: var(--alert);  text-shadow: 0 0 16px rgba(255, 159, 67, 0.5); }
-        .data-card.red    .data-value { color: var(--danger); text-shadow: 0 0 16px rgba(255, 77, 109, 0.55); }
+        .data-card.green  .data-value { color: var(--ok);     text-shadow: 0 0 18px rgba(0, 255, 163, 0.5); }
+        .data-card.yellow .data-value { color: var(--warn);   text-shadow: 0 0 18px rgba(255, 209, 102, 0.5); }
+        .data-card.orange .data-value { color: var(--alert);  text-shadow: 0 0 18px rgba(255, 159, 67, 0.55); }
+        .data-card.red    .data-value { color: var(--danger); text-shadow: 0 0 18px rgba(255, 77, 109, 0.6); }
         .data-card.gray   .data-value { color: var(--gray); }
 
         .data-change {
             font-family: var(--num-font);
-            font-size: 0.34em;
+            font-size: 0.32em;
             font-weight: 600;
-            padding: 2px 8px;
+            padding: 3px 9px;
             border-radius: 4px;
             white-space: nowrap;
             letter-spacing: 1px;
         }
-        .data-change.up   { color: #ff8095; background: rgba(255, 77, 109, 0.14); border: 1px solid rgba(255, 77, 109, 0.35); }
-        .data-change.down { color: #6cf0c2; background: rgba(0, 255, 163, 0.10); border: 1px solid rgba(0, 255, 163, 0.3); }
-        .data-change.same { color: var(--gray); background: rgba(139, 152, 171, 0.12); border: 1px solid rgba(139, 152, 171, 0.3); }
-        .data-unit { font-size: 0.75em; color: var(--dim); letter-spacing: 1px; }
+        .data-change.up   { color: #ffb3c0; background: rgba(255, 77, 109, 0.22); border: 1px solid rgba(255, 77, 109, 0.45); }
+        .data-change.down { color: #9df5d4; background: rgba(0, 255, 163, 0.15); border: 1px solid rgba(0, 255, 163, 0.4); }
+        .data-change.same { color: #c3cddc; background: rgba(139, 152, 171, 0.18); border: 1px solid rgba(139, 152, 171, 0.35); }
+        .data-unit { font-size: 0.88em; color: rgba(230, 238, 250, 0.6); letter-spacing: 1px; }
         .data-status {
-            font-size: 0.8em;
+            font-size: 0.95em;
             margin-top: 10px;
-            padding: 4px 10px;
+            padding: 5px 12px;
             display: inline-block;
-            background: rgba(10, 17, 34, 0.7);
-            border: 1px solid var(--tile-line);
+            background: rgba(7, 11, 20, 0.55);
+            border: 1px solid rgba(230, 238, 250, 0.2);
             border-radius: 4px;
             color: var(--text);
             letter-spacing: 1px;
+            font-weight: 600;
         }
 
-        /* ===== 趨勢圖(空品板塊延伸,同語言) ===== */
+        /* ===== 趨勢圖(空品板塊延伸) ===== */
         .trend-container {
             background: rgba(10, 17, 34, 0.6);
             border: 1px solid var(--tile-line);
@@ -1352,20 +1406,20 @@ HTML_TEMPLATE = """
         }
         .trend-title {
             font-family: var(--title-font);
-            font-size: 0.68em;
+            font-size: 0.78em;
             letter-spacing: 3px;
             color: var(--cyan);
             text-transform: uppercase;
             margin-bottom: 4px;
         }
         .trend-legend {
-            font-size: 0.8em;
+            font-size: 0.92em;
             color: var(--dim);
             margin-bottom: 10px;
         }
         .trend-legend .dot {
             display: inline-block;
-            width: 9px; height: 9px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             margin: 0 4px 0 12px;
             vertical-align: middle;
@@ -1377,7 +1431,7 @@ HTML_TEMPLATE = """
             text-align: center;
             color: var(--dim);
             padding: 25px 0;
-            font-size: 0.9em;
+            font-size: 1em;
         }
 
         .update-info {
@@ -1386,12 +1440,12 @@ HTML_TEMPLATE = """
             background: rgba(7, 12, 24, 0.75);
             border: 1px solid var(--tile-line);
             border-radius: 8px;
-            font-size: 0.86em;
+            font-size: 0.95em;
             letter-spacing: 1px;
-            line-height: 1.7;
+            line-height: 1.8;
         }
         .update-time { font-family: var(--num-font); font-weight: 600; color: var(--cyan); }
-        .refresh-note { margin-top: 6px; font-size: 0.85em; color: rgba(122, 139, 163, 0.7); }
+        .refresh-note { margin-top: 6px; font-size: 0.9em; color: rgba(143, 161, 186, 0.7); }
         .error-message {
             background: rgba(255, 209, 102, 0.08);
             color: var(--warn);
@@ -1400,58 +1454,58 @@ HTML_TEMPLATE = """
             text-align: center;
             margin: 20px 0;
             border: 1px solid rgba(255, 209, 102, 0.4);
+            font-size: 1.05em;
         }
 
-        /* ===== 警特報(沿用呼吸燈邏輯,改為暗色霓虹) ===== */
+        /* ===== 警特報(暗色霓虹 + 狀態色填色) ===== */
         .alert-container {
             margin-bottom: 18px;
             transition: opacity 0.5s ease-in-out;
         }
         .weather-alert {
-            padding: 13px 16px;
-            border-radius: 8px;
+            padding: 14px 16px;
+            border-radius: 9px;
             margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 13px;
             animation: alertPulse 2s ease-in-out infinite;
-            background: rgba(14, 23, 45, 0.8);
         }
         .weather-alert.alert-red {
+            background: linear-gradient(160deg, rgba(255, 77, 109, 0.22), rgba(66, 10, 22, 0.92));
             border: 1px solid var(--danger);
-            box-shadow: inset 0 0 24px rgba(255, 77, 109, 0.12);
         }
-        .weather-alert.alert-red .alert-title { color: var(--danger); }
+        .weather-alert.alert-red .alert-title { color: #ffd9e0; }
         .weather-alert.alert-orange {
+            background: linear-gradient(160deg, rgba(255, 159, 67, 0.20), rgba(62, 34, 6, 0.92));
             border: 1px solid var(--alert);
-            box-shadow: inset 0 0 24px rgba(255, 159, 67, 0.10);
         }
-        .weather-alert.alert-orange .alert-title { color: var(--alert); }
+        .weather-alert.alert-orange .alert-title { color: #ffe6cc; }
         .weather-alert.alert-yellow {
+            background: linear-gradient(160deg, rgba(255, 209, 102, 0.18), rgba(58, 46, 8, 0.92));
             border: 1px solid var(--warn);
-            box-shadow: inset 0 0 24px rgba(255, 209, 102, 0.10);
         }
-        .weather-alert.alert-yellow .alert-title { color: var(--warn); }
+        .weather-alert.alert-yellow .alert-title { color: #fff3d1; }
         .weather-alert.alert-blue {
+            background: linear-gradient(160deg, rgba(0, 229, 255, 0.18), rgba(6, 34, 52, 0.92));
             border: 1px solid var(--cyan);
-            box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.10);
         }
-        .weather-alert.alert-blue .alert-title { color: var(--cyan); }
-        .alert-icon { font-size: 1.8em; }
+        .weather-alert.alert-blue .alert-title { color: #d3f8ff; }
+        .alert-icon { font-size: 2em; }
         .alert-content { flex: 1; }
         .alert-title {
-            font-size: 1.05em;
+            font-size: 1.2em;
             font-weight: 700;
             margin-bottom: 4px;
             letter-spacing: 1px;
         }
-        .alert-time { font-size: 0.82em; color: var(--dim); }
+        .alert-time { font-size: 0.92em; color: rgba(230, 238, 250, 0.65); }
         @keyframes alertPulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.88; }
         }
 
-        /* 嚴重級警報:呼吸燈(紅光/橙光由內而外脈動) */
+        /* 嚴重級警報:呼吸燈 */
         .weather-alert.severe {
             animation: none;
             border-width: 2px;
@@ -1460,29 +1514,29 @@ HTML_TEMPLATE = """
         .weather-alert.alert-red.severe { animation: breatheRed 2.5s ease-in-out infinite; }
         .weather-alert.alert-orange.severe { animation: breatheOrange 2.5s ease-in-out infinite; }
         @keyframes breatheRed {
-            0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 77, 109, 0.25), inset 0 0 24px rgba(255, 77, 109, 0.12); filter: brightness(1); }
-            50%      { box-shadow: 0 0 22px 8px rgba(255, 77, 109, 0.5),  inset 0 0 30px rgba(255, 77, 109, 0.2);  filter: brightness(1.1); }
+            0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 77, 109, 0.25); filter: brightness(1); }
+            50%      { box-shadow: 0 0 24px 9px rgba(255, 77, 109, 0.5);  filter: brightness(1.12); }
         }
         @keyframes breatheOrange {
-            0%, 100% { box-shadow: 0 0 5px 1px rgba(255, 159, 67, 0.22), inset 0 0 24px rgba(255, 159, 67, 0.10); filter: brightness(1); }
-            50%      { box-shadow: 0 0 18px 7px rgba(255, 159, 67, 0.45), inset 0 0 28px rgba(255, 159, 67, 0.18); filter: brightness(1.08); }
+            0%, 100% { box-shadow: 0 0 5px 1px rgba(255, 159, 67, 0.22); filter: brightness(1); }
+            50%      { box-shadow: 0 0 20px 8px rgba(255, 159, 67, 0.45); filter: brightness(1.1); }
         }
         .weather-alert.severe .alert-icon {
-            font-size: 2.3em;
+            font-size: 2.5em;
             animation: iconBreathe 2.5s ease-in-out infinite;
         }
         @keyframes iconBreathe {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.12); }
         }
-        .weather-alert.severe .alert-title { font-size: 1.18em; letter-spacing: 1.5px; }
+        .weather-alert.severe .alert-title { font-size: 1.32em; letter-spacing: 1.5px; }
         .alert-badge {
             display: inline-block;
-            background: rgba(255, 77, 109, 0.15);
+            background: rgba(7, 11, 20, 0.45);
             border: 1px solid currentColor;
             font-size: 0.6em;
             font-weight: 900;
-            padding: 2px 9px;
+            padding: 2px 10px;
             border-radius: 3px;
             margin-left: 10px;
             letter-spacing: 3px;
@@ -1637,8 +1691,8 @@ HTML_TEMPLATE = """
                 return;
             }
 
-            const W = 640, H = 190;
-            const padL = 34, padR = 12, padT = 12, padB = 26;
+            const W = 640, H = 200;
+            const padL = 36, padR = 12, padT = 12, padB = 28;
             const plotW = W - padL - padR;
             const plotH = H - padT - padB;
 
@@ -1668,7 +1722,7 @@ HTML_TEMPLATE = """
                 pts.forEach((t, i) => {
                     const v = t[key];
                     if (v === null || v === undefined) return;
-                    s += `<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="3" fill="${color}"><title>${t.time} ${key.toUpperCase()}: ${v}</title></circle>`;
+                    s += `<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="3.2" fill="${color}"><title>${t.time} ${key.toUpperCase()}: ${v}</title></circle>`;
                 });
                 return s;
             }
@@ -1678,14 +1732,14 @@ HTML_TEMPLATE = """
                 const val = Math.round(yMax * g / 3);
                 const y = yPos(val).toFixed(1);
                 grid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(0,229,255,0.12)" stroke-width="1" stroke-dasharray="4 4"/>`;
-                grid += `<text x="${padL - 6}" y="${(+y + 4)}" text-anchor="end" font-size="10" fill="#7a8ba3">${val}</text>`;
+                grid += `<text x="${padL - 6}" y="${(+y + 4)}" text-anchor="end" font-size="11.5" fill="#8fa1ba">${val}</text>`;
             }
 
             let xLabels = '';
             const step = Math.max(1, Math.ceil(pts.length / 6));
             pts.forEach((t, i) => {
                 if (i % step === 0 || i === pts.length - 1) {
-                    xLabels += `<text x="${xPos(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#7a8ba3">${t.time}</text>`;
+                    xLabels += `<text x="${xPos(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11.5" fill="#8fa1ba">${t.time}</text>`;
                 }
             });
 
@@ -1861,7 +1915,7 @@ HTML_TEMPLATE = """
                 <div class="weather-item comfort {{ forecast.comfort_color }}">
                     <div>
                         <div class="weather-label">😊 舒適度</div>
-                        <div style="font-size: 0.85em; margin-top: 5px; color: var(--text);"><span data-forecast-comfort-desc>{{ forecast.comfort_desc }}</span> (指數 <span data-forecast-comfort>{{ forecast.comfort_index }}</span>)</div>
+                        <div class="comfort-desc-line"><span data-forecast-comfort-desc>{{ forecast.comfort_desc }}</span> (指數 <span data-forecast-comfort>{{ forecast.comfort_index }}</span>)</div>
                     </div>
                     <span class="comfort-emoji" data-forecast-comfort-emoji>{{ forecast.comfort_emoji }}</span>
                 </div>
@@ -1879,7 +1933,7 @@ HTML_TEMPLATE = """
                 <div class="weather-item wind">
                     <div style="width: 100%;">
                         <div class="weather-label" style="margin-bottom: 8px;">🌬️ 風速與風向</div>
-                        <div style="font-size: 1em; font-weight: 600; color: var(--cyan);" data-forecast-wind>{{ forecast.wind_display }}</div>
+                        <div class="wind-value" style="font-size: 1.15em; font-weight: 700;" data-forecast-wind>{{ forecast.wind_display }}</div>
                     </div>
                 </div>
             </div>
@@ -1991,7 +2045,7 @@ HTML_TEMPLATE = """
                 <div class="trend-legend">
                     <span class="dot pm25"></span>PM2.5
                     <span class="dot pm10"></span>PM10
-                    <span style="margin-left:12px; color:rgba(122,139,163,0.6);">(μg/m³,滑鼠移到資料點可看數值)</span>
+                    <span style="margin-left:12px; color:rgba(143,161,186,0.6);">(μg/m³,滑鼠移到資料點可看數值)</span>
                 </div>
                 <div id="trend-chart"><div class="trend-empty">趨勢圖載入中…</div></div>
             </div>
