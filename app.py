@@ -119,6 +119,68 @@ def get_alert_visual(phenomena, significance, color):
     )
     return icon, severe
 
+# ★★★ 警報二級分類:Warning(警告)/ Watch(觀察/注意) ★★★
+def classify_alert_level(phenomena, significance, color):
+    """
+    參照 NWS 二級制,依嚴重程度分級:
+      Warning(警告)= 立即危害,應改變行程:
+        颱風、豪雨/大豪雨/超大豪雨、任何紅色燈號、
+        橙色等級的高溫/低溫(對戶外活動有實質生理危害)
+      Watch(觀察/注意)= 留意但可正常活動:
+        大雨、強風、濃霧、黃色燈號高低溫等其餘特報
+    """
+    text = f"{phenomena or ''}{significance or ''}"
+
+    if '颱風' in text or '豪雨' in text or color == 'red':
+        return 'warning'
+    if color == 'orange' and ('高溫' in text or '低溫' in text or '寒流' in text):
+        return 'warning'
+    return 'watch'
+
+# ★★★ 跨來源去重複:同一災害家族只保留最嚴重一則 ★★★
+# (一般警特報 API 與豪大雨特報 API 會對同一場雨各發一則,在此合併)
+RAIN_RANK = [('超大豪雨', 4), ('大豪雨', 3), ('豪雨', 2), ('大雨', 1)]
+COLOR_RANK = {'red': 3, 'orange': 2, 'yellow': 1, 'blue': 1}
+
+def dedupe_alerts(alerts_list):
+    def family(a):
+        """歸類災害家族。颱風不合併(海警/陸警為不同警報)。"""
+        text = f"{a.get('phenomena', '')}{a.get('significance', '')}"
+        if '颱風' in text:
+            return 'typhoon:' + text
+        for kw, _ in RAIN_RANK:
+            if kw in text:
+                return 'rain'
+        if '低溫' in text or '寒流' in text:
+            return 'cold'
+        if '高溫' in text:
+            return 'heat'
+        if '濃霧' in text:
+            return 'fog'
+        if '強風' in text:
+            return 'wind'
+        return 'other:' + text
+
+    def score(a):
+        """家族內嚴重度排位:雨級 > 燈號色 > 資訊完整度"""
+        text = f"{a.get('phenomena', '')}{a.get('significance', '')}"
+        rain = 0
+        for kw, v in RAIN_RANK:
+            if kw in text:
+                rain = max(rain, v)
+        return (rain, COLOR_RANK.get(a.get('color'), 0), len(a.get('significance', '') or ''))
+
+    best = {}
+    for a in alerts_list:
+        f = family(a)
+        if f not in best or score(a) > score(best[f]):
+            if f in best:
+                print(f"  ♻️ 去重複:保留較嚴重的「{a['phenomena']}{a['significance']}」,捨棄「{best[f]['phenomena']}{best[f]['significance']}」")
+            best[f] = a
+        elif f in best:
+            print(f"  ♻️ 去重複:捨棄重複警報「{a['phenomena']}{a['significance']}」(已有較嚴重的「{best[f]['phenomena']}{best[f]['significance']}」)")
+    return list(best.values())
+
 # ★★★ 跑步適宜度指數 ★★★
 def calculate_running_index():
     """
@@ -708,15 +770,22 @@ def fetch_weather_alerts():
             import traceback
             traceback.print_exc()
 
-        # 6. 統一為每則警報標上專屬圖示與嚴重等級(呼吸燈)
+        # 6. 跨來源去重複(同一災害家族只保留最嚴重一則)
+        alerts_list = dedupe_alerts(alerts_list)
+
+        # 7. 統一標上專屬圖示、嚴重等級(呼吸燈)與 Warning/Watch 分級
         for a in alerts_list:
             icon, severe = get_alert_visual(a.get('phenomena', ''), a.get('significance', ''), a.get('color', 'orange'))
             a['icon'] = icon
             a['severe'] = severe
+            level = classify_alert_level(a.get('phenomena', ''), a.get('significance', ''), a.get('color', 'orange'))
+            a['level'] = level
+            a['level_label'] = 'WARNING·警告' if level == 'warning' else 'WATCH·注意'
 
-        alerts_list.sort(key=lambda a: (not a.get('severe', False)))
+        # Warning 排在 Watch 前面;同級之中嚴重級(呼吸燈)優先
+        alerts_list.sort(key=lambda a: (a.get('level') != 'warning', not a.get('severe', False)))
 
-        # 7. 更新全域資料
+        # 8. 更新全域資料
         if len(alerts_list) > 0:
             alert_data = {
                 'has_alert': True,
@@ -1533,15 +1602,26 @@ HTML_TEMPLATE = """
         .alert-badge {
             display: inline-block;
             background: rgba(7, 11, 20, 0.45);
-            border: 1px solid currentColor;
             font-size: 0.6em;
             font-weight: 900;
             padding: 2px 10px;
             border-radius: 3px;
             margin-left: 10px;
-            letter-spacing: 3px;
+            letter-spacing: 2px;
             vertical-align: middle;
+        }
+        /* Warning(警告):紅色系 + 閃爍,立即危害 */
+        .alert-badge.warning {
+            color: #ffd9e0;
+            border: 1px solid var(--danger);
+            background: rgba(255, 77, 109, 0.22);
             animation: badgeBlink 2.5s ease-in-out infinite;
+        }
+        /* Watch(觀察/注意):琥珀色靜態,留意即可 */
+        .alert-badge.watch {
+            color: #fff3d1;
+            border: 1px solid rgba(255, 209, 102, 0.55);
+            background: rgba(255, 209, 102, 0.14);
         }
         @keyframes badgeBlink {
             0%, 100% { opacity: 1; }
@@ -1649,7 +1729,7 @@ HTML_TEMPLATE = """
                                     data.alert_data.alerts.forEach(alert => {
                                         const severeClass = alert.severe ? ' severe' : '';
                                         const icon = alert.icon || '⚠️';
-                                        const badge = alert.severe ? '<span class="alert-badge">緊急</span>' : '';
+                                        const badge = `<span class="alert-badge ${alert.level || 'watch'}">${alert.level_label || 'WATCH·注意'}</span>`;
                                         alertsHTML += `
                                             <div class="weather-alert alert-${alert.color}${severeClass}">
                                                 <div class="alert-icon">${icon}</div>
@@ -1947,7 +2027,7 @@ HTML_TEMPLATE = """
                     <div class="weather-alert alert-{{ alert.color }}{% if alert.severe %} severe{% endif %}">
                         <div class="alert-icon">{{ alert.get('icon', '⚠️') }}</div>
                         <div class="alert-content">
-                            <div class="alert-title">{{ alert.phenomena }}{{ alert.significance }}{% if alert.severe %}<span class="alert-badge">緊急</span>{% endif %}</div>
+                            <div class="alert-title">{{ alert.phenomena }}{{ alert.significance }}<span class="alert-badge {{ alert.get('level', 'watch') }}">{{ alert.get('level_label', 'WATCH·注意') }}</span></div>
                             <div class="alert-time">生效時間：{{ alert.start_time }} ~ {{ alert.end_time }}</div>
                         </div>
                     </div>
